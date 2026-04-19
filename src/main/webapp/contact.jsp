@@ -109,7 +109,7 @@
     <div class="card">
         <h2>Send a Message</h2>
 
-        <!-- 🔥 UPDATED ACTION -->
+        <!--  UPDATED ACTION -->
         <form method="post" action="contact-submit.jsp">
 
             <input type="text" name="name" placeholder="Your Name" required />

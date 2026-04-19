@@ -23,7 +23,7 @@ public class SecurityFilter implements Filter {
 
         String path = req.getServletPath();
 
-        // 🔥 MAP PATH TO SERVLET CLASS (Reflection)
+        //  MAP PATH TO SERVLET CLASS (Reflection)
         Class<?> servletClass = ServletRegistry.getServlet(path);
 
         // If no mapping → allow
@@ -31,7 +31,7 @@ public class SecurityFilter implements Filter {
             chain.doFilter(request, response);
             return;
         }
-// USER ONLY CHECK (BLOCK ADMIN)
+// USER ONLY CHECK (BLOCK ADMIN)- BORROW ACCESS DENIED FOR ADMIN
         if (servletClass.isAnnotationPresent(UserOnly.class)) {
 
             if (session == null || "ADMIN".equals(role)) {
@@ -49,6 +49,7 @@ public class SecurityFilter implements Filter {
                 return;
             }
         }
+        // MEMBERS PAGE TO BE DENIED FOR NORML USERS
         //  CHECK CUSTOM ANNOTATION reflection
         if (servletClass.isAnnotationPresent(AdminOnly.class)) {
 
@@ -57,7 +58,7 @@ public class SecurityFilter implements Filter {
 
                 System.out.println("ACCESS DENIED → " + path + " for role: " + role);
 
-                // ✅ SHOW POPUP MESSAGE INSTEAD OF REDIRECT
+                //  SHOW POPUP MESSAGE INSTEAD OF REDIRECT
                 res.setContentType("text/html");
                 PrintWriter out = res.getWriter();
 
@@ -78,10 +79,10 @@ public class SecurityFilter implements Filter {
                 out.println("<h3> Access Denied</h3>");
                 out.println("<p>Only ADMIN users can access this page.</p>");
 
-                // 🔵 LOGIN BUTTON
+                //  LOGIN BUTTON
                 out.println("<button class='login' onclick=\"window.location='login'\">Login as Admin</button>");
 
-                // ⚪ CLOSE BUTTON
+                //  CLOSE BUTTON
                 out.println("<button class='close' onclick=\"window.history.back()\">Close</button>");
 
                 out.println("</div>");
@@ -92,7 +93,7 @@ public class SecurityFilter implements Filter {
             }
         }
 
-        // ✅ ALLOW REQUEST
+        //  ALLOW REQUEST
         chain.doFilter(request, response);
     }
 

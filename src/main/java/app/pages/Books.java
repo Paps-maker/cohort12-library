@@ -12,7 +12,9 @@ public class Books {
                 "Technology",
                 "Education",
                 "Kids",
+                "Story",
                 "History"
+
         );
     }
 }

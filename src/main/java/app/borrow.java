@@ -1,40 +1,46 @@
 package app;
 
+import app.dao.BookDAO;
+import app.dao.BorrowDAO;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletContext;
 import jakarta.servlet.annotation.WebServlet;
-import jakarta.servlet.http.HttpServlet;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.*;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.ArrayList;
 import java.util.List;
 
 @WebServlet("/borrow")
 @LoginRequired
-
 public class borrow extends HttpServlet {
+
+    BorrowDAO borrowDAO = new BorrowDAO();
+    BookDAO bookDAO = new BookDAO();
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
         HttpSession session = req.getSession(false);
+
         if (session == null || session.getAttribute("username") == null) {
             resp.sendRedirect("login");
             return;
         }
 
+        String username = (String) session.getAttribute("username");
+
         resp.setContentType("text/html");
         PrintWriter writer = resp.getWriter();
+
+        // GET BOOKS FROM DATABASE (NO BOOKSTORE ANYMORE)
+        List<Book> books = bookDAO.getAllBooks();
 
         writer.println("<!DOCTYPE html>");
         writer.println("<html>");
         writer.println("<head>");
         writer.println("<title>Borrow Books</title>");
+
         writer.println("<style>");
         writer.println("body { font-family: Arial; margin: 40px; background-color: #f4f6f8; }");
         writer.println("header { background-color: #2c3e50; color: white; padding: 15px; }");
@@ -43,29 +49,28 @@ public class borrow extends HttpServlet {
         writer.println("button { padding: 10px; background-color: #3498db; color: white; border: none; width: 100%; }");
         writer.println("a { display: inline-block; margin-top: 10px; color: #3498db; }");
         writer.println("</style>");
-        writer.println("</head>");
 
-        writer.println("<body>");
+        writer.println("</head><body>");
 
-        writer.println("<header>");
-        writer.println("<h1>Borrow a Book</h1>");
-        writer.println("</header>");
+        writer.println("<header><h1>Borrow a Book</h1></header>");
 
         writer.println("<section>");
-        writer.println("<h2>Select a Book to Borrow</h2>");
+        writer.println("<h2>Welcome " + username + "</h2>");
+
         writer.println("<form method='post' action='./borrow'>");
 
-        writer.println("<label>Member Name:</label>");
-        writer.println("<input type='text' name='memberName' placeholder='Enter your name' required />");
+        writer.println("<input type='hidden' name='username' value='" + username + "'/>");
 
-        writer.println("<label>Book to Borrow:</label>");
-        writer.println("<select name='bookName' required>");
+        writer.println("<label>Select Book:</label>");
+        writer.println("<select name='bookId' required>");
 
-        for (String book : BookStore.books) {
-            writer.println("<option value='" + book + "'>" + book + "</option>");
+        for (Book book : books) {
+            writer.println("<option value='" + book.getId() + "'>" +
+                    book.getTitle() + "</option>");
         }
 
         writer.println("</select>");
+
         writer.println("<button type='submit'>Borrow Book</button>");
         writer.println("</form>");
         writer.println("</section>");
@@ -75,8 +80,7 @@ public class borrow extends HttpServlet {
         writer.println("<a href='./books'>&larr; Back to Book List</a>");
         writer.println("</section>");
 
-        writer.println("</body>");
-        writer.println("</html>");
+        writer.println("</body></html>");
     }
 
     @Override
@@ -85,98 +89,66 @@ public class borrow extends HttpServlet {
 
         HttpSession session = req.getSession(false);
 
-        //  SESSION CHECK
         if (session == null || session.getAttribute("username") == null) {
             resp.sendRedirect("login");
             return;
         }
 
         String role = (String) session.getAttribute("role");
+        String username = (String) session.getAttribute("username");
 
-        //  ADMIN NOT ALLOWED TO BORROW (CUSTOM POPUP PAGE)
+        // ❌ ADMIN NOT ALLOWED
         if ("ADMIN".equals(role)) {
-
             resp.setContentType("text/html");
             PrintWriter writer = resp.getWriter();
 
-            writer.println("<!DOCTYPE html>");
-            writer.println("<html>");
-            writer.println("<head>");
-            writer.println("<title>Access Denied</title>");
+            writer.println("<html><head><title>Access Denied</title>");
             writer.println("<style>");
-            writer.println("body { font-family: Arial; background:#f4f6f8; display:flex; justify-content:center; align-items:center; height:100vh; }");
-            writer.println(".box { background:white; padding:30px; border-radius:10px; text-align:center; width:320px; box-shadow:0 0 15px rgba(0,0,0,0.2);} ");
-            writer.println(".box h2 { color:red; }");
-            writer.println(".btn { margin-top:15px; display:inline-block; padding:10px 15px; background:#3498db; color:white; text-decoration:none; border-radius:5px; }");
-            writer.println("</style>");
-            writer.println("</head>");
-
-            writer.println("<body>");
+            writer.println("body{font-family:Arial;display:flex;justify-content:center;align-items:center;height:100vh;background:#f4f6f8;}");
+            writer.println(".box{background:white;padding:30px;border-radius:10px;text-align:center;box-shadow:0 0 15px rgba(0,0,0,0.2)}");
+            writer.println("a{display:inline-block;margin-top:10px;padding:10px 15px;background:#3498db;color:white;text-decoration:none;border-radius:5px}");
+            writer.println("</style></head><body>");
 
             writer.println("<div class='box'>");
-            writer.println("<h2>Access Denied</h2>");
-            writer.println("<p>Only normal users are allowed to borrow books.</p>");
-            writer.println("<a class='btn' href='books'>Go Back</a>");
+            writer.println("<h2 style='color:red;'>Access Denied</h2>");
+            writer.println("<p>Only users can borrow books.</p>");
+            writer.println("<a href='books'>Go Back</a>");
             writer.println("</div>");
 
-            writer.println("</body>");
-            writer.println("</html>");
-
+            writer.println("</body></html>");
             return;
         }
 
-        String memberName = req.getParameter("memberName");
-        String bookName = req.getParameter("bookName");
+        int bookId = Integer.parseInt(req.getParameter("bookId"));
 
-        ServletContext context = getServletContext();
-
-        List<String> borrowedList =
-                (List<String>) context.getAttribute("borrowedBooks");
-
-        if (borrowedList == null) {
-            borrowedList = new ArrayList<>();
-        }
-
-        borrowedList.add(memberName + " borrowed \"" + bookName + "\"");
-
-        context.setAttribute("borrowedBooks", borrowedList);
-
-        // ================= SUCCESS PAGE =================
+        // DATABASE BORROW
+        boolean success = borrowDAO.borrowBook(username, bookId);
 
         resp.setContentType("text/html");
         PrintWriter writer = resp.getWriter();
 
-        writer.println("<!DOCTYPE html>");
-        writer.println("<html>");
-        writer.println("<head>");
-        writer.println("<title>Borrow Confirmation</title>");
+        writer.println("<html><head><title>Borrow Confirmation</title>");
         writer.println("<style>");
-        writer.println("body { font-family: Arial; margin: 40px; background-color: #f4f6f8; }");
-        writer.println("header { background-color: #2c3e50; color: white; padding: 15px; }");
-        writer.println("section { margin-top: 20px; padding: 20px; background: white; border-radius: 5px; max-width: 400px; }");
-        writer.println("a { display: inline-block; margin-top: 10px; color: #3498db; }");
-        writer.println("</style>");
-        writer.println("</head>");
-
-        writer.println("<body>");
-
-        writer.println("<header>");
-        writer.println("<h1>Borrow Confirmation</h1>");
-        writer.println("</header>");
+        writer.println("body{font-family:Arial;margin:40px;background:#f4f6f8;}");
+        writer.println("section{background:white;padding:20px;border-radius:6px;max-width:400px;}");
+        writer.println("a{display:inline-block;margin-top:10px;color:#3498db;}");
+        writer.println("</style></head><body>");
 
         writer.println("<section>");
-        writer.println("<h2>Book Borrowed Successfully!</h2>");
-        writer.println("<p>Member Name: <strong>" + memberName + "</strong></p>");
-        writer.println("<p>Book Name: <strong>" + bookName + "</strong></p>");
+
+        if (success) {
+            writer.println("<h2 style='color:green;'>Book Borrowed Successfully!</h2>");
+        } else {
+            writer.println("<h2 style='color:red;'>Borrow Failed</h2>");
+        }
+
         writer.println("</section>");
 
         writer.println("<section>");
-        writer.println("<a href='./borrow'>&larr; Borrow Another Book</a><br>");
-        writer.println("<a href='./borrowed'>View Borrowed Books</a><br>");
-        writer.println("<a href='./books'>&larr; Back to Book List</a>");
+        writer.println("<a href='borrow'>Borrow Another</a><br>");
+        writer.println("<a href='books'>Back to Books</a>");
         writer.println("</section>");
 
-        writer.println("</body>");
-        writer.println("</html>");
+        writer.println("</body></html>");
     }
 }

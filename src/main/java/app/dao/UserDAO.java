@@ -38,7 +38,7 @@ public class UserDAO {
             return rows > 0;
 
         } catch (Exception e) {
-            System.out.println("❌ INSERT FAILED");
+            System.out.println(" INSERT FAILED");
             e.printStackTrace();
             return false;
         }
@@ -70,7 +70,7 @@ public class UserDAO {
             }
 
         } catch (Exception e) {
-            System.out.println("❌ LOGIN QUERY FAILED");
+            System.out.println(" LOGIN QUERY FAILED");
             e.printStackTrace();
         }
 
@@ -102,7 +102,7 @@ public class UserDAO {
             }
 
         } catch (Exception e) {
-            System.out.println("❌ FETCH USERS FAILED");
+            System.out.println(" FETCH USERS FAILED");
             e.printStackTrace();
         }
 
@@ -133,7 +133,7 @@ public class UserDAO {
             }
 
         } catch (Exception e) {
-            System.out.println("❌ GET USER FAILED");
+            System.out.println(" GET USER FAILED");
             e.printStackTrace();
         }
 
@@ -162,7 +162,7 @@ public class UserDAO {
             return rows > 0;
 
         } catch (Exception e) {
-            System.out.println("❌ UPDATE FAILED");
+            System.out.println(" UPDATE FAILED");
             e.printStackTrace();
             return false;
         }
@@ -186,7 +186,7 @@ public class UserDAO {
             return rows > 0;
 
         } catch (Exception e) {
-            System.out.println("❌ DELETE FAILED");
+            System.out.println(" DELETE FAILED");
             e.printStackTrace();
             return false;
         }

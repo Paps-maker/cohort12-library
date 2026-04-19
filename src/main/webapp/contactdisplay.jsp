@@ -54,7 +54,7 @@
 
 <div class="box">
 
-    <h2>✅ Message Received</h2>
+    <h2> Message Received</h2>
 
     <p>Thank you, <strong><%= request.getParameter("name") %></strong></p>
 
@@ -67,7 +67,7 @@
 
     <p>We will contact you shortly.</p>
 
-    <a href="index.jsp">🏠 Back to Home</a>
+    <a href="index.jsp"> Back to Home</a>
 
 </div>
 

@@ -24,14 +24,14 @@ public class DBConnection {
 
             connection = DriverManager.getConnection(URL, USER, PASS);
 
-            System.out.println("✅ DATABASE CONNECTION SUCCESSFUL");
+            System.out.println(" DATABASE CONNECTION SUCCESSFUL");
 
         } catch (ClassNotFoundException e) {
-            System.out.println("❌ MySQL Driver not found");
+            System.out.println(" MySQL Driver not found");
             e.printStackTrace();
 
         } catch (SQLException e) {
-            System.out.println("❌ DATABASE CONNECTION FAILED");
+            System.out.println(" DATABASE CONNECTION FAILED");
             e.printStackTrace();
         }
     }
@@ -48,11 +48,11 @@ public class DBConnection {
     public Connection getConnection() {
         try {
             if (connection == null || connection.isClosed()) {
-                System.out.println("♻ Reconnecting to database...");
+                System.out.println(" Reconnecting to database...");
                 connect();
             }
         } catch (SQLException e) {
-            System.out.println("❌ Connection check failed");
+            System.out.println(" Connection check failed");
             e.printStackTrace();
         }
 

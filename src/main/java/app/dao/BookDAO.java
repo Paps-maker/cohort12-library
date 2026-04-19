@@ -9,39 +9,40 @@ import java.util.List;
 
 public class BookDAO {
 
-    // ✅ ALWAYS USE THIS METHOD
+    //  ALWAYS USE THIS METHOD
     private Connection getCon() {
         return DBConnection.getInstance().getConnection();
     }
 
     // =========================
-    // ADD BOOK
+    // ADD BOOK (Now includes Description)
     // =========================
     public boolean addBook(Book book) {
         try {
-            String sql = "INSERT INTO books(title) VALUES(?)";
+            // Updated SQL to include description
+            String sql = "INSERT INTO books(title, image_url, description) VALUES(?, ?, ?)";
 
             PreparedStatement ps = getCon().prepareStatement(sql);
             ps.setString(1, book.getTitle());
+            ps.setString(2, book.getImageUrl());
+            ps.setString(3, book.getDescription()); //  Added Description
 
             int rows = ps.executeUpdate();
 
-            System.out.println("✅ BOOK INSERTED: " + rows);
-
+            System.out.println(" BOOK INSERTED: " + rows);
             return rows > 0;
 
         } catch (Exception e) {
-            System.out.println("❌ ADD BOOK FAILED");
+            System.out.println(" ADD BOOK FAILED");
             e.printStackTrace();
             return false;
         }
     }
 
     // =========================
-    // GET ALL BOOKS
+    // GET ALL BOOKS (Fetches Description)
     // =========================
     public List<Book> getAllBooks() {
-
         List<Book> books = new ArrayList<>();
 
         try {
@@ -51,14 +52,17 @@ public class BookDAO {
             ResultSet rs = ps.executeQuery();
 
             while (rs.next()) {
+                //  Using the new constructor: (id, title, imageUrl, description)
                 books.add(new Book(
                         rs.getInt("id"),
-                        rs.getString("title")
+                        rs.getString("title"),
+                        rs.getString("image_url"),
+                        rs.getString("description") //  Added Description
                 ));
             }
 
         } catch (Exception e) {
-            System.out.println("❌ FETCH BOOKS FAILED");
+            System.out.println(" FETCH BOOKS FAILED");
             e.printStackTrace();
         }
 
@@ -71,72 +75,62 @@ public class BookDAO {
     public boolean deleteBook(int id) {
         try {
             String sql = "DELETE FROM books WHERE id=?";
-
             PreparedStatement ps = getCon().prepareStatement(sql);
             ps.setInt(1, id);
-
             int rows = ps.executeUpdate();
-
-            System.out.println("🗑 DELETE RESULT: " + rows);
-
             return rows > 0;
-
         } catch (Exception e) {
-            System.out.println("❌ DELETE FAILED");
             e.printStackTrace();
             return false;
         }
     }
 
     // =========================
-    // GET BOOK BY ID
+    // GET BOOK BY ID (Fetches Description)
     // =========================
     public Book getBookById(int id) {
-
         try {
             String sql = "SELECT * FROM books WHERE id=?";
-
             PreparedStatement ps = getCon().prepareStatement(sql);
             ps.setInt(1, id);
-
             ResultSet rs = ps.executeQuery();
 
             if (rs.next()) {
                 return new Book(
                         rs.getInt("id"),
-                        rs.getString("title")
+                        rs.getString("title"),
+                        rs.getString("image_url"),
+                        rs.getString("description") //  Added Description
                 );
             }
-
         } catch (Exception e) {
-            System.out.println("❌ GET BOOK FAILED");
             e.printStackTrace();
         }
-
         return null;
     }
 
     // =========================
-    // UPDATE BOOK
+    // UPDATE BOOK (Now updates Description)
     // =========================
     public boolean updateBook(Book book) {
-
         try {
-            String sql = "UPDATE books SET title=? WHERE id=?";
+            // Updated SQL to modify all three fields
+            String sql = "UPDATE books SET title=?, image_url=?, description=? WHERE id=?";
 
             PreparedStatement ps = getCon().prepareStatement(sql);
 
             ps.setString(1, book.getTitle());
-            ps.setInt(2, book.getId());
+            ps.setString(2, book.getImageUrl());
+            ps.setString(3, book.getDescription()); //  Added Description
+            ps.setInt(4, book.getId()); //  ID is now the 4th parameter
 
             int rows = ps.executeUpdate();
 
-            System.out.println("✏ UPDATE RESULT: " + rows);
-
+            System.out.println(" UPDATE RESULT: " + rows);
             return rows > 0;
 
         } catch (Exception e) {
-            System.out.println("❌ UPDATE FAILED");
+            System.out.println(" UPDATE FAILED");
             e.printStackTrace();
             return false;
         }
