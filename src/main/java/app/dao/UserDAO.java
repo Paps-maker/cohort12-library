@@ -1,194 +1,196 @@
 package app.dao;
 
-import app.User;
+import app.model.User;
 import app.db.DBConnection;
+import jakarta.annotation.Resource;
+import jakarta.enterprise.context.ApplicationScoped;
+import javax.sql.DataSource;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
+@ApplicationScoped
 public class UserDAO {
 
-    // =========================
-    // GET CONNECTION
-    // =========================
-    private Connection getCon() {
-        return DBConnection.getInstance().getConnection();
+    // ✅ NEW: Injected from standalone.xml (Must match your JNDI name)
+    @Resource(lookup = "java:jboss/datasources/LibraryDS")
+    private DataSource mysqlDataSource;
+
+    // ✅ UPDATED: Now pulls from the WildFly Connection Pool
+    private Connection getMySQLCon() {
+        try {
+            return mysqlDataSource.getConnection();
+        } catch (SQLException e) {
+            System.err.println("❌ MySQL Pool Error: Ensure standalone.xml URL has library_2 (lowercase)");
+            return null;
+        }
     }
 
-    // =========================
-    // CREATE USER
-    // =========================
-    public boolean createUser(User user) {
+    // ✅ KEEPING: Postgres stays manual as per your setup
+    private Connection getPostgresCon() {
+        return DBConnection.getPostgresConnection();
+    }
 
-        try {
-            String sql = "INSERT INTO users(username,email,password,role) VALUES(?,?,?,?)";
+    // =========================================================================
+    // SECTION 1: AUTHENTICATION (The Login Fix)
+    // =========================================================================
 
-            PreparedStatement ps = getCon().prepareStatement(sql);
+    public User findUser(String username, String password) {
+        // ✅ BACKTICKS: Used to ensure we target your table in library_2, not system tables
+        String sql = "SELECT * FROM `user` WHERE username=? AND password=?";
 
-            ps.setString(1, user.getUsername());
-            ps.setString(2, user.getEmail());
-            ps.setString(3, user.getPassword());
-            ps.setString(4, user.getRole());
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql)) {
 
-            int rows = ps.executeUpdate();
+            if (con == null) return null;
+            ps.setString(1, username);
+            ps.setString(2, password);
 
-            System.out.println("INSERT RESULT: " + rows);
-
-            return rows > 0;
-
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapUser(rs);
+                }
+            }
         } catch (Exception e) {
-            System.out.println(" INSERT FAILED");
+            System.err.println("❌ LOGIN QUERY FAILED");
             e.printStackTrace();
+        }
+        return null;
+    }
+
+    // =========================================================================
+    // SECTION 2: USER MANAGEMENT (Dual-Write Logic)
+    // =========================================================================
+
+    public boolean createUser(User user) {
+        String mysqlSql = "INSERT INTO `user`(username, email, password, role) VALUES(?,?,?,?)";
+        String pgSql = "INSERT INTO \"user\"(username, email, password, role) VALUES(?,?,?,?)";
+
+        // Using try-with-resources internally via utility methods ensures closure
+        boolean mysqlSaved = executeWrite(getMySQLCon(), mysqlSql, user.getUsername(), user.getEmail(), user.getPassword(), user.getRole());
+        boolean postgresSaved = executeWrite(getPostgresCon(), pgSql, user.getUsername(), user.getEmail(), user.getPassword(), user.getRole());
+
+        System.out.println("📝 DUAL-INSERT: MySQL=" + mysqlSaved + " | Postgres=" + postgresSaved);
+        return mysqlSaved || postgresSaved;
+    }
+
+    public boolean updateUser(User user) {
+        String mysqlSql = "UPDATE `user` SET username=?, email=?, role=? WHERE id=?";
+        String pgSql = "UPDATE \"user\" SET username=?, email=?, role=? WHERE id=?";
+
+        boolean mysqlUpd = executeUpdate(getMySQLCon(), mysqlSql, user);
+        boolean postgresUpd = executeUpdate(getPostgresCon(), pgSql, user);
+
+        return mysqlUpd || postgresUpd;
+    }
+
+    public boolean deleteUser(int id) {
+        String mysqlSql = "DELETE FROM `user` WHERE id=?";
+        String pgSql = "DELETE FROM \"user\" WHERE id=?";
+
+        boolean mysqlDel = executeDelete(getMySQLCon(), mysqlSql, id);
+        boolean postgresDel = executeDelete(getPostgresCon(), pgSql, id);
+
+        return mysqlDel || postgresDel;
+    }
+
+    // =========================================================================
+    // SECTION 3: UTILITY METHODS (Correctly returning pooled connections)
+    // =========================================================================
+
+    private boolean executeWrite(Connection con, String sql, String... params) {
+        if (con == null) return false;
+        try (con; PreparedStatement ps = con.prepareStatement(sql)) { // ✅ con inside try-with ensures it returns to pool
+            for (int i = 0; i < params.length; i++) {
+                ps.setString(i + 1, params[i]);
+            }
+            return ps.executeUpdate() > 0;
+        } catch (Exception e) {
             return false;
         }
     }
 
-    // =========================
-    // LOGIN USER
-    // =========================
-    public User findUser(String username, String password) {
-
-        try {
-            String sql = "SELECT * FROM users WHERE username=? AND password=?";
-
-            PreparedStatement ps = getCon().prepareStatement(sql);
-            ps.setString(1, username);
-            ps.setString(2, password);
-
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-
-                return new User(
-                        rs.getInt("id"),
-                        rs.getString("username"),
-                        rs.getString("email"),
-                        rs.getString("password"),
-                        rs.getString("role")
-                );
-            }
-
-        } catch (Exception e) {
-            System.out.println(" LOGIN QUERY FAILED");
-            e.printStackTrace();
-        }
-
-        return null;
-    }
-
-    // =========================
-    // GET ALL USERS
-    // =========================
-    public List<User> getAllUsers() {
-
-        List<User> users = new ArrayList<>();
-
-        try {
-            String sql = "SELECT * FROM users";
-
-            PreparedStatement ps = getCon().prepareStatement(sql);
-
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next()) {
-                users.add(new User(
-                        rs.getInt("id"),
-                        rs.getString("username"),
-                        rs.getString("email"),
-                        rs.getString("password"),
-                        rs.getString("role")
-                ));
-            }
-
-        } catch (Exception e) {
-            System.out.println(" FETCH USERS FAILED");
-            e.printStackTrace();
-        }
-
-        return users;
-    }
-
-    // =========================
-    // GET USER BY ID (FOR EDIT)
-    // =========================
-    public User getUserById(int id) {
-
-        try {
-            String sql = "SELECT * FROM users WHERE id=?";
-
-            PreparedStatement ps = getCon().prepareStatement(sql);
-            ps.setInt(1, id);
-
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                return new User(
-                        rs.getInt("id"),
-                        rs.getString("username"),
-                        rs.getString("email"),
-                        rs.getString("password"),
-                        rs.getString("role")
-                );
-            }
-
-        } catch (Exception e) {
-            System.out.println(" GET USER FAILED");
-            e.printStackTrace();
-        }
-
-        return null;
-    }
-
-    // =========================
-    // UPDATE USER
-    // =========================
-    public boolean updateUser(User user) {
-
-        try {
-            String sql = "UPDATE users SET username=?, email=?, role=? WHERE id=?";
-
-            PreparedStatement ps = getCon().prepareStatement(sql);
-
+    private boolean executeUpdate(Connection con, String sql, User user) {
+        if (con == null) return false;
+        try (con; PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, user.getUsername());
             ps.setString(2, user.getEmail());
             ps.setString(3, user.getRole());
             ps.setInt(4, user.getId());
-
-            int rows = ps.executeUpdate();
-
-            System.out.println("UPDATE RESULT: " + rows);
-
-            return rows > 0;
-
+            return ps.executeUpdate() > 0;
         } catch (Exception e) {
-            System.out.println(" UPDATE FAILED");
-            e.printStackTrace();
             return false;
         }
     }
 
-    // =========================
-    // DELETE USER
-    // =========================
-    public boolean deleteUser(int id) {
-
-        try {
-            String sql = "DELETE FROM users WHERE id=?";
-
-            PreparedStatement ps = getCon().prepareStatement(sql);
+    private boolean executeDelete(Connection con, String sql, int id) {
+        if (con == null) return false;
+        try (con; PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setInt(1, id);
-
-            int rows = ps.executeUpdate();
-
-            System.out.println("DELETE RESULT: " + rows);
-
-            return rows > 0;
-
+            return ps.executeUpdate() > 0;
         } catch (Exception e) {
-            System.out.println(" DELETE FAILED");
-            e.printStackTrace();
             return false;
         }
+    }
+
+    private User mapUser(ResultSet rs) throws SQLException {
+        return new User(
+                rs.getInt("id"),
+                rs.getString("username"),
+                rs.getString("email"),
+                rs.getString("password"),
+                rs.getString("role")
+        );
+    }
+
+    public List<User> getAllUsers() {
+        List<User> users = new ArrayList<>();
+        String sql = "SELECT * FROM `user`";
+        try (Connection con = getMySQLCon();
+             Statement stmt = con.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) { users.add(mapUser(rs)); }
+        } catch (Exception e) { }
+        return users;
+    }
+    public boolean emailExists(String email) {
+        String sql = "SELECT COUNT(*) FROM users WHERE email = ?";
+        try (Connection con = getMySQLCon(); // Use your existing connection method
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    public String getWhitelistedRole(String email) {
+        String sql = "SELECT assigned_role FROM authorized_emails WHERE email = ?";
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setString(1, email);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("assigned_role"); // Return the role (STUDENT/TEACHER)
+                }
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return null; // Email is not whitelisted
+    }
+    public User getUserById(int id) {
+        String sql = "SELECT * FROM `user` WHERE id=?";
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return mapUser(rs);
+            }
+        } catch (Exception e) { }
+        return null;
     }
 }

@@ -1,11 +1,11 @@
 package app;
 
-import app.dao.BookDAO;
-import app.dao.BorrowDAO;
+import jakarta.inject.Inject;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
-
+import app.model.Book;
+import app.validation.ValidatorQualifier;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
@@ -14,71 +14,79 @@ import java.util.List;
 @LoginRequired
 public class borrow extends HttpServlet {
 
-    BorrowDAO borrowDAO = new BorrowDAO();
-    BookDAO bookDAO = new BookDAO();
+    /**
+     * ✅ CDI MANAGED INJECTION
+     * Provides the shared LibraryService facade.
+     */
+    @Inject
+    private LibraryService libraryService;
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
         HttpSession session = req.getSession(false);
-
-        if (session == null || session.getAttribute("username") == null) {
-            resp.sendRedirect("login");
-            return;
-        }
-
         String username = (String) session.getAttribute("username");
 
-        resp.setContentType("text/html");
+        resp.setContentType("text/html;charset=UTF-8");
         PrintWriter writer = resp.getWriter();
 
-        // GET BOOKS FROM DATABASE (NO BOOKSTORE ANYMORE)
-        List<Book> books = bookDAO.getAllBooks();
+        List<Book> books = libraryService.getAllBooks();
+        double unpaidFines = libraryService.getUnpaidFines(username);
 
-        writer.println("<!DOCTYPE html>");
-        writer.println("<html>");
-        writer.println("<head>");
-        writer.println("<title>Borrow Books</title>");
-
+        writer.println("<!DOCTYPE html><html><head><title>Library | Borrow</title>");
         writer.println("<style>");
-        writer.println("body { font-family: Arial; margin: 40px; background-color: #f4f6f8; }");
-        writer.println("header { background-color: #2c3e50; color: white; padding: 15px; }");
-        writer.println("section { margin: 20px; padding: 20px; background: white; border-radius: 5px; max-width: 400px; }");
-        writer.println("input, select { width: 100%; padding: 8px; margin: 10px 0; }");
-        writer.println("button { padding: 10px; background-color: #3498db; color: white; border: none; width: 100%; }");
-        writer.println("a { display: inline-block; margin-top: 10px; color: #3498db; }");
-        writer.println("</style>");
+        writer.println("body { font-family: 'Inter', system-ui, sans-serif; background: #f0f2f5; margin: 0; padding: 40px; color: #1a1f36; }");
+        writer.println(".container { max-width: 500px; margin: auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }");
+        writer.println("header { background: #6366f1; color: white; padding: 30px; text-align: center; }");
+        writer.println("header h1 { margin: 0; font-size: 24px; letter-spacing: -0.5px; }");
+        writer.println("section { padding: 30px; }");
+        writer.println("h3 { margin-top: 0; color: #4f46e5; }");
+        writer.println(".fine-msg { background: #fff1f2; color: #e11d48; padding: 15px; border-radius: 8px; border-left: 4px solid #e11d48; font-weight: 600; margin-bottom: 20px; }");
+        writer.println("select, input[type='number'] { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 16px; margin: 10px 0; transition: border-color 0.2s; box-sizing: border-box; }");
+        writer.println("select:focus, input[type='number']:focus { outline: none; border-color: #6366f1; }");
+        writer.println("label { font-size: 14px; color: #64748b; font-weight: 600; }");
+        writer.println("button { background: #6366f1; color: white; border: none; width: 100%; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.3s; margin-top: 10px; }");
+        writer.println("button:hover { background: #4f46e5; transform: translateY(-1px); }");
+        writer.println(".nav-links { margin-top: 25px; display: flex; justify-content: center; gap: 20px; }");
+        writer.println(".nav-links a { color: #64748b; text-decoration: none; font-size: 14px; font-weight: 500; padding: 8px 12px; border-radius: 6px; transition: 0.2s; }");
+        writer.println(".nav-links a:hover { color: #6366f1; background: #eef2ff; }");
+        writer.println("</style></head><body>");
 
-        writer.println("</head><body>");
-
-        writer.println("<header><h1>Borrow a Book</h1></header>");
-
+        writer.println("<div class='container'>");
+        writer.println("<header><h1>Library Catalog</h1></header>");
         writer.println("<section>");
-        writer.println("<h2>Welcome " + username + "</h2>");
+        writer.println("<h3>Welcome, " + username + "</h3>");
+
+        if (unpaidFines > 0) {
+            writer.println("<div class='fine-msg'> Unpaid Fine: KSH " + String.format("%.2f", unpaidFines) + "<br><small>Borrowing is disabled until settled.</small></div>");
+        }
 
         writer.println("<form method='post' action='./borrow'>");
 
-        writer.println("<input type='hidden' name='username' value='" + username + "'/>");
-
-        writer.println("<label>Select Book:</label>");
-        writer.println("<select name='bookId' required>");
+        writer.println("<label>Select Book</label>");
+        writer.println("<select name='bookId' required " + (unpaidFines > 0 ? "disabled" : "") + ">");
+        writer.println("<option value='' disabled selected>-- Search Collection --</option>");
 
         for (Book book : books) {
-            writer.println("<option value='" + book.getId() + "'>" +
-                    book.getTitle() + "</option>");
+            if (libraryService.isBookAvailable(book.getId())) {
+                writer.println("<option value='" + book.getId() + "'>" + book.getTitle() + "</option>");
+            }
         }
-
         writer.println("</select>");
 
-        writer.println("<button type='submit'>Borrow Book</button>");
+        writer.println("<label>Borrow Duration (1-10 Days)</label>");
+        writer.println("<input type='number' name='days' min='1' max='10' value='7' required " + (unpaidFines > 0 ? "disabled" : "") + ">");
+
+        writer.println("<button type='submit' " + (unpaidFines > 0 ? "style='background:#cbd5e1; cursor:not-allowed;' disabled" : "") + ">Confirm Checkout</button>");
         writer.println("</form>");
         writer.println("</section>");
+        writer.println("</div>");
 
-        writer.println("<section>");
-        writer.println("<a href='./borrowed'>View Borrowed Books</a><br>");
-        writer.println("<a href='./books'>&larr; Back to Book List</a>");
-        writer.println("</section>");
+        writer.println("<div class='nav-links'>");
+        writer.println("<a href='borrowed'> My Borrow History</a>");
+        writer.println("<a href='books'> View All Books</a>");
+        writer.println("</div>");
 
         writer.println("</body></html>");
     }
@@ -88,67 +96,38 @@ public class borrow extends HttpServlet {
             throws ServletException, IOException {
 
         HttpSession session = req.getSession(false);
-
-        if (session == null || session.getAttribute("username") == null) {
-            resp.sendRedirect("login");
-            return;
-        }
-
-        String role = (String) session.getAttribute("role");
         String username = (String) session.getAttribute("username");
+        String role = (String) session.getAttribute("role");
 
-        // ❌ ADMIN NOT ALLOWED
-        if ("ADMIN".equals(role)) {
-            resp.setContentType("text/html");
-            PrintWriter writer = resp.getWriter();
+        String bookIdParam = req.getParameter("bookId");
+        String daysParam = req.getParameter("days");
 
-            writer.println("<html><head><title>Access Denied</title>");
-            writer.println("<style>");
-            writer.println("body{font-family:Arial;display:flex;justify-content:center;align-items:center;height:100vh;background:#f4f6f8;}");
-            writer.println(".box{background:white;padding:30px;border-radius:10px;text-align:center;box-shadow:0 0 15px rgba(0,0,0,0.2)}");
-            writer.println("a{display:inline-block;margin-top:10px;padding:10px 15px;background:#3498db;color:white;text-decoration:none;border-radius:5px}");
-            writer.println("</style></head><body>");
+        // ✅ ONE-SHOT TRANSACTION
+        // attemptBorrow handles validation AND the database insert in a single call to the EJB.
+        String result = libraryService.attemptBorrow(username, role, bookIdParam, daysParam);
 
-            writer.println("<div class='box'>");
-            writer.println("<h2 style='color:red;'>Access Denied</h2>");
-            writer.println("<p>Only users can borrow books.</p>");
-            writer.println("<a href='books'>Go Back</a>");
-            writer.println("</div>");
-
-            writer.println("</body></html>");
-            return;
-        }
-
-        int bookId = Integer.parseInt(req.getParameter("bookId"));
-
-        // DATABASE BORROW
-        boolean success = borrowDAO.borrowBook(username, bookId);
-
-        resp.setContentType("text/html");
-        PrintWriter writer = resp.getWriter();
-
-        writer.println("<html><head><title>Borrow Confirmation</title>");
-        writer.println("<style>");
-        writer.println("body{font-family:Arial;margin:40px;background:#f4f6f8;}");
-        writer.println("section{background:white;padding:20px;border-radius:6px;max-width:400px;}");
-        writer.println("a{display:inline-block;margin-top:10px;color:#3498db;}");
-        writer.println("</style></head><body>");
-
-        writer.println("<section>");
-
-        if (success) {
-            writer.println("<h2 style='color:green;'>Book Borrowed Successfully!</h2>");
+        if (result == null) {
+            // Success (EJB returned null)
+            showResponsePage(resp, "Success", "Book checked out! Return within " + daysParam + " days to avoid late fees.", true);
         } else {
-            writer.println("<h2 style='color:red;'>Borrow Failed</h2>");
+            // Failure (EJB returned a validation error message)
+            showResponsePage(resp, "Checkout Blocked", result, false);
         }
+    }
 
-        writer.println("</section>");
+    private void showResponsePage(HttpServletResponse resp, String title, String message, boolean isSuccess) throws IOException {
+        resp.setContentType("text/html;charset=UTF-8");
+        PrintWriter writer = resp.getWriter();
+        String color = isSuccess ? "#10b981" : "#ef4444";
 
-        writer.println("<section>");
-        writer.println("<a href='borrow'>Borrow Another</a><br>");
-        writer.println("<a href='books'>Back to Books</a>");
-        writer.println("</section>");
-
+        writer.println("<html><head><style>");
+        writer.println("body{font-family:'Inter', sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; background:#f0f2f5; margin:0;}");
+        writer.println(".card{background:white; padding:40px; border-radius:12px; text-align:center; box-shadow:0 10px 25px rgba(0,0,0,0.05); max-width:400px; border-top: 5px solid " + color + ";}");
+        writer.println("h2{color:" + color + "; margin-top:0;}");
+        writer.println("p{color:#64748b; line-height:1.6;}");
+        writer.println(".btn{display:inline-block; margin-top:20px; padding:12px 24px; background:#6366f1; color:white; text-decoration:none; border-radius:8px; font-weight:600;}");
+        writer.println("</style></head><body>");
+        writer.println("<div class='card'><h2>" + title + "</h2><p>" + message + "</p><a href='borrow' class='btn'>Continue</a></div>");
         writer.println("</body></html>");
     }
 }

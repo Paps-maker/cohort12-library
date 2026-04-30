@@ -41,12 +41,14 @@
             line-height: 1.6;
         }
 
+        /* Added box-sizing to prevent padding from increasing width */
         input, textarea {
             width: 100%;
             padding: 10px;
             margin: 10px 0;
             border-radius: 6px;
             border: 1px solid #ccc;
+            box-sizing: border-box;
         }
 
         textarea {
@@ -63,6 +65,7 @@
             border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
+            transition: background 0.3s;
         }
 
         button:hover {
@@ -95,7 +98,6 @@
 
 <div class="container">
 
-    <!-- CONTACT INFO -->
     <div class="card">
         <h2>Get in Touch</h2>
         <p>We are here to help you with book access, registration, and inquiries.</p>
@@ -105,16 +107,16 @@
         <p><strong>Location:</strong> Nairobi, Kenya</p>
     </div>
 
-    <!-- CONTACT FORM -->
     <div class="card">
         <h2>Send a Message</h2>
 
-        <!--  UPDATED ACTION -->
-        <form method="post" action="contact-submit.jsp">
+        <form method="post" action="contactdisplay.jsp">
 
             <input type="text" name="name" placeholder="Your Name" required />
 
             <input type="email" name="email" placeholder="Your Email" required />
+
+            <input type="text" name="subject" placeholder="Subject" required />
 
             <textarea name="message" placeholder="Write your message..." required></textarea>
 

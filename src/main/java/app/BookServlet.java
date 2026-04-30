@@ -1,11 +1,10 @@
 package app;
 
-import app.dao.BookDAO;
-import app.dao.BorrowDAO;
+import app.model.Book;
+import jakarta.inject.Inject;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
@@ -13,128 +12,142 @@ import java.util.List;
 @WebServlet("/books")
 public class BookServlet extends HttpServlet {
 
+    @Inject
+    private LibraryService libraryService;
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        //  CHECK SESSION
         HttpSession session = request.getSession(false);
 
         if (session == null || session.getAttribute("username") == null) {
-            response.sendRedirect("login");
+            response.sendRedirect("login.jsp");
             return;
         }
 
         String username = (String) session.getAttribute("username");
         String role = (String) session.getAttribute("role");
+        String contextPath = request.getContextPath();
 
         response.setContentType("text/html");
         PrintWriter out = response.getWriter();
 
-        //  DAOs
-        BookDAO bookDao = new BookDAO();
-        BorrowDAO borrowDao = new BorrowDAO();
+        // DATA FETCHING
+        List<Book> allBooks = libraryService.getAllBooks();
+        int totalBooks = allBooks.size();
+        int availableCount = libraryService.getAvailableCount();
+        int displayBorrowedCount = libraryService.getBorrowedCountForUser(username, role);
+        String borrowedLabel = libraryService.getBorrowedLabel(role);
 
-        //  DATA FETCHING
-        List<Book> allBooks = bookDao.getAllBooks();
-
-        // Logic for the Borrowed Card
-        int displayBorrowedCount;
-        String borrowedLabel;
+        double totalOwed;
+        String fineLabel;
 
         if ("ADMIN".equals(role)) {
-            displayBorrowedCount = borrowDao.getAllBorrowed().size();
-            borrowedLabel = "Total Borrowed";
+            totalOwed = libraryService.getTotalSystemRiskDebt();
+            fineLabel = "SYSTEM DEBT: KSH ";
         } else {
-            displayBorrowedCount = borrowDao.getUserBorrowed(username).size();
-            borrowedLabel = "My Borrowed";
+            double recordedFines = libraryService.getUnpaidFines(username);
+            double projectedFines = libraryService.getProjectedLateFees(username);
+            totalOwed = recordedFines + projectedFines;
+            fineLabel = "UNPAID FINES: KSH ";
         }
-
-        int totalBooks = allBooks.size();
-        int totalBorrowedGlobal = borrowDao.getAllBorrowed().size();
-        int available = totalBooks - totalBorrowedGlobal;
 
         out.println("<!DOCTYPE html>");
         out.println("<html><head><title>Library Dashboard</title>");
 
+        // CLEAN WHITE THEME CSS - NO HOVER REQUIRED
         out.println("<style>");
-        /* ===== STYLING UPDATES FOR IMAGES ===== */
-        out.println("body { font-family:'Segoe UI'; margin:0; background:#f4f6f8; }");
-        out.println(".header { background:linear-gradient(135deg,#1e3c72,#2a5298); color:white; padding:18px; text-align:center; font-size:20px; font-weight:bold;}");
-        out.println(".container { max-width:1100px; margin:auto; padding:20px;}");
-        out.println(".welcome { font-size:18px; margin:15px 0; color:#2c3e50;}");
+        out.println(":root { --primary: #1e3c72; --secondary: #2a5298; --bg: #ffffff; --card-bg: #f8fafc; --text: #334155; }");
+        out.println("body { font-family:'Segoe UI', system-ui, sans-serif; margin:0; background:var(--bg); color:var(--text); }");
+        out.println(".header { background: linear-gradient(135deg, #1e3c72, #2a5298); color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }");
+        out.println(".container { max-width: 1200px; margin: auto; padding: 20px; }");
 
-        out.println(".stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px;}");
-        out.println(".stat-card { background:white; padding:15px; border-radius:10px; text-align:center; box-shadow:0 3px 10px rgba(0,0,0,0.08); border-left:4px solid #2a5298;}");
-        out.println(".stat-title { font-size:11px; color:#777; text-transform:uppercase;}");
-        out.println(".stat-value { font-size:20px; font-weight:bold; color:#2c3e50; margin-top:5px;}");
+        out.println(".welcome-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }");
+        out.println(".welcome { font-size: 18px; color: #1e293b; font-weight: 600; }");
+        out.println(".fine-alert { background: #fee2e2; color: #b91c1c; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: bold; text-decoration: none; border: 1px solid #fecaca; }");
 
-        out.println(".library { margin-top:25px;}");
-        out.println(".library-title { font-size:18px; font-weight:bold; margin-bottom:12px; color:#2c3e50; border-left:4px solid #2a5298; padding-left:10px;}");
-        out.println(".shelf { display:flex; flex-wrap:wrap; gap:15px; background:white; padding:20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.06);} ");
+        out.println(".stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }");
+        out.println(".stat-card { background: var(--card-bg); padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center; }");
+        out.println(".stat-title { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; }");
+        out.println(".stat-value { font-size: 22px; font-weight: 800; color: var(--primary); }");
 
-        /* UPDATED BOOK CARD WITH IMAGE SUPPORT */
-        out.println(".book { display:flex; width:280px; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 3px 10px rgba(0,0,0,0.05); transition:0.3s; border:1px solid #eee;}");
-        out.println(".book:hover { transform:translateY(-5px); box-shadow:0 8px 18px rgba(0,0,0,0.12);} ");
-        out.println(".spine { width:8px; background:linear-gradient(180deg,#2a5298,#1e3c72); flex-shrink:0;} ");
+        out.println(".library-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #1e293b; border-left: 4px solid var(--secondary); padding-left: 10px; }");
 
-        out.println(".book-cover { width:90px; height:120px; object-fit:cover; background:#ecf0f1; border-right:1px solid #f0f0f0; }");
+        // GRID SETUP
+        out.println(".shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }");
 
-        out.println(".book-content { padding:12px; flex-grow:1; display:flex; flex-direction:column; justify-content:space-between;}");
-        out.println(".book-title { font-size:14px; font-weight:600; color:#2c3e50; margin-bottom:4px; line-height:1.3;}");
+        // CARD DESIGN (STATIC)
+        out.println(".book { background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; display: flex; flex-direction: column; transition: box-shadow 0.3s; }");
+        out.println(".book:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }");
 
-        /*  ADDED DESCRIPTION STYLE (Limited to 3 lines) */
-        out.println(".book-description { font-size:11px; color:#666; margin-bottom:8px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.4; }");
+        out.println(".book-cover { width: 100%; height: 260px; object-fit: cover; background: #f1f5f9; border-bottom: 1px solid #f1f5f9; }");
 
-        out.println(".book-actions { display:flex; gap:6px; }");
-        out.println(".btn-edit, .btn-delete { font-size:10px; padding:4px 8px; border-radius:4px; text-decoration:none; color:white; font-weight:bold;}");
-        out.println(".btn-edit { background:#3498db; }");
-        out.println(".btn-delete { background:#e74c3c; }");
+        out.println(".book-details { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }");
+        out.println(".book-title { font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 5px; min-height: 40px; }");
+        out.println(".book-description { font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }");
 
-        out.println(".links { margin-top: 25px; display: flex; flex-wrap: wrap; gap: 10px; }");
-        out.println(".links a { display: inline-block; padding: 10px 18px; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600; background:#2a5298; color:white; transition:0.3s;}");
-        out.println(".links a:hover { background:#1e3c72; transform:translateY(-2px); }");
+        out.println(".badge { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; display: inline-block; margin-bottom: 5px; }");
+        out.println(".bg-green { background: #dcfce7; color: #166534; }");
+        out.println(".bg-red { background: #fee2e2; color: #991b1b; }");
+        out.println(".wait-text { font-size: 11px; color: #ef4444; font-weight: 600; margin-bottom: 10px; display: block; }");
+
+        out.println(".book-actions { display: flex; gap: 8px; margin-top: auto; }");
+        out.println(".btn-edit, .btn-delete { flex: 1; text-align: center; font-size: 11px; padding: 7px; border-radius: 4px; text-decoration: none; color: white; font-weight: bold; }");
+        out.println(".btn-edit { background: #3b82f6; }");
+        out.println(".btn-delete { background: #ef4444; }");
+
+        out.println(".links { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 10px; }");
+        out.println(".links a { padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600; background: #f1f5f9; color: #1e293b; border: 1px solid #e2e8f0; transition: 0.2s; }");
+        out.println(".links a:hover { background: var(--secondary); color: white; }");
         out.println("</style>");
 
         out.println("</head><body>");
 
-        out.println("<div class='header'> SCHOOL LIBRARY </div>");
+        out.println("<div class='header'> SCHOOL LIBRARY SYSTEM </div>");
         out.println("<div class='container'>");
 
-        out.println("<div class='welcome'>Welcome, " + username + " </div>");
+        out.println("<div class='welcome-row'>");
+        out.println("<div class='welcome'>Welcome back, " + username + "</div>");
+
+        if (totalOwed > 0) {
+            String adminStyle = "style='background:#1e293b; color:#fbbf24; border-color:#fbbf24;'";
+            out.println("<a href='fines' class='fine-alert' " + ("ADMIN".equals(role) ? adminStyle : "") + ">"
+                    + fineLabel + String.format("%.2f", totalOwed) + "</a>");
+        }
+        out.println("</div>");
 
         out.println("<div class='stats'>");
         out.println("<div class='stat-card'><div class='stat-title'>Active Users</div><div class='stat-value'><span id='activeUsers'>...</span></div></div>");
         out.println("<div class='stat-card'><div class='stat-title'>Total Books</div><div class='stat-value'>" + totalBooks + "</div></div>");
         out.println("<div class='stat-card'><div class='stat-title'>" + borrowedLabel + "</div><div class='stat-value'>" + displayBorrowedCount + "</div></div>");
-        out.println("<div class='stat-card'><div class='stat-title'>Available</div><div class='stat-value'>" + available + "</div></div>");
+        out.println("<div class='stat-card'><div class='stat-title'>Available Now</div><div class='stat-value'>" + availableCount + "</div></div>");
         out.println("</div>");
 
         out.println("<div class='library'>");
-        out.println("<div class='library-title'>Available Books Collection</div>");
+        out.println("<div class='library-title'>Book Collection</div>");
         out.println("<div class='shelf'>");
 
         for (Book book : allBooks) {
-            // ✅ Image logic: use URL if exists, otherwise a placeholder
-            String imgUrl = (book.getImageUrl() != null && !book.getImageUrl().isEmpty())
-                    ? book.getImageUrl()
-                    : "https://via.placeholder.com/90x120?text=No+Cover";
-
-            // ✅ Description logic
-            String desc = (book.getDescription() != null && !book.getDescription().isEmpty())
-                    ? book.getDescription()
-                    : "No description available.";
+            boolean isAvailable = libraryService.isBookAvailable(book.getId());
+            String imgUrl = (book.getImageUrl() != null && !book.getImageUrl().isEmpty()) ? book.getImageUrl() : "https://via.placeholder.com/300x450?text=No+Cover";
+            String desc = (book.getDescription() != null && !book.getDescription().isEmpty()) ? book.getDescription() : "No description provided.";
 
             out.println("<div class='book'>");
-            out.println("<div class='spine'></div>");
-
-            // ✅ Render Image
             out.println("<img src='" + imgUrl + "' class='book-cover' alt='Book Cover'>");
 
-            out.println("<div class='book-content'>");
-            out.println("<div class='book-title'>" + book.getTitle() + "</div>");
+            out.println("<div class='book-details'>");
 
-            // ✅ ADDED DESCRIPTION DIV
+            if (!isAvailable) {
+                out.println("<span class='badge bg-red'>Borrowed</span>");
+                int daysLeft = libraryService.getDaysUntilAvailable(book.getTitle());
+                String waitMsg = (daysLeft > 0) ? "Available in " + daysLeft + " days" : "Return in process..";
+                out.println("<span class='wait-text'>" + waitMsg + "</span>");
+            } else {
+                out.println("<span class='badge bg-green'>Available</span>");
+            }
+
+            out.println("<div class='book-title'>" + book.getTitle() + "</div>");
             out.println("<div class='book-description'>" + desc + "</div>");
 
             if ("ADMIN".equals(role)) {
@@ -143,30 +156,33 @@ public class BookServlet extends HttpServlet {
                 out.println("<a class='btn-delete' href='delete-book?id=" + book.getId() + "' onclick='return confirm(\"Delete this book?\")'>Delete</a>");
                 out.println("</div>");
             }
-            out.println("</div>");
-            out.println("</div>");
+            out.println("</div></div>");
         }
 
         out.println("</div></div>");
 
         out.println("<div class='links'>");
-        out.println("<a href='members'> Members</a>");
+        out.println("<a href='members'>Members</a>");
         out.println("<a href='borrow'>Borrow Book</a>");
-        out.println("<a href='borrowed'>Borrowed History</a>");
+        out.println("<a href='fines' style='background:#f59e0b; color:white; border:none;'>Fines Dashboard</a>");
+        out.println("<a href='borrowed'>Borrowed books</a>");
 
         if ("ADMIN".equals(role)) {
-            out.println("<a href='add-book.jsp' style='background:#27ae60;'>Add Book</a>");
+            out.println("<a href='" + contextPath + "/addbook' style='background:#10b981; color:white; border:none;'>+ Add Book</a>");
         }
 
-        out.println("<a href='logout' style='background:#e74c3c;'> Logout</a>");
+        out.println("<a href='logout' style='background:#ef4444; color:white; border:none;'>Logout</a>");
+        out.println("</div>");
         out.println("</div>");
 
-        out.println("</div>");
-
-        // Active Users Script
         out.println("<script>");
-        out.println("function loadUsers(){fetch('active-users').then(r=>r.text()).then(d=>document.getElementById('activeUsers').innerText=d);} ");
-        out.println("setInterval(loadUsers,2000);loadUsers();");
+        out.println("function loadUsers() {");
+        out.println("  fetch('active-users')");
+        out.println("    .then(r => { if (r.redirected) { window.location.reload(); return; } return r.text(); })");
+        out.println("    .then(d => { if (d && d.length < 10) { document.getElementById('activeUsers').innerText = d; } })");
+        out.println("    .catch(err => console.log('Session expired'));");
+        out.println("}");
+        out.println("setInterval(loadUsers, 3000); loadUsers();");
         out.println("</script>");
 
         out.println("</body></html>");

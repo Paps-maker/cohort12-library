@@ -1,5 +1,8 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
+<%@ page contentType="text/html;charset=UTF-8" language="java" isELIgnored="false" %>
 <!DOCTYPE html>
+<jsp:useBean id="contactUs" class="app.model.ContactUs" />
+<jsp:setProperty name="contactUs" property="*" />
 <html>
 <head>
     <title>Message Received</title>
@@ -56,14 +59,12 @@
 
     <h2> Message Received</h2>
 
-    <p>Thank you, <strong><%= request.getParameter("name") %></strong></p>
+    <p>Thank you,</p>
 
-    <p><strong>Email:</strong> <%= request.getParameter("email") %></p>
-
-    <div class="msg">
-        <p><strong>Your Message:</strong></p>
-        <p><%= request.getParameter("message") %></p>
-    </div>
+    Name: <jsp:getProperty name="contactUs" property="name" /><br/>
+           Email: ${param.email}<br/>
+           Subject: ${param.subject}<br/>
+           Message: ${param.message}<br/>
 
     <p>We will contact you shortly.</p>
 

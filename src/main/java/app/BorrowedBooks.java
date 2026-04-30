@@ -1,10 +1,9 @@
 package app;
 
-import app.dao.BorrowDAO;
+import jakarta.inject.Inject;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
-
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
@@ -12,73 +11,117 @@ import java.util.List;
 @WebServlet("/borrowed")
 public class BorrowedBooks extends HttpServlet {
 
-    BorrowDAO dao = new BorrowDAO();
+    @Inject
+    private LibraryService libraryService;
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
         HttpSession session = req.getSession(false);
-
         if (session == null || session.getAttribute("username") == null) {
-            resp.sendRedirect("login");
+            resp.sendRedirect(req.getContextPath() + "/login");
             return;
         }
 
         String username = (String) session.getAttribute("username");
         String role = (String) session.getAttribute("role");
+        String contextPath = req.getContextPath();
 
-        resp.setContentType("text/html");
+        resp.setContentType("text/html;charset=UTF-8");
         PrintWriter writer = resp.getWriter();
 
+        // Data Source: Admin sees everything, Members see their own
         List<String> borrowedList;
-
-        // ✅ ADMIN → SEE ALL
         if ("ADMIN".equals(role)) {
-            borrowedList = dao.getAllBorrowed();
+            borrowedList = libraryService.getAdminBorrowedRecords();
         } else {
-            // ✅ USER → SEE ONLY OWN
-            borrowedList = dao.getUserBorrowed(username);
+            borrowedList = libraryService.getMemberActiveLoans(username);
         }
 
-        writer.println("<!DOCTYPE html>");
-        writer.println("<html><head><title>Borrowed Books</title>");
-
+        writer.println("<!DOCTYPE html><html><head><title>Library | Dashboard</title>");
         writer.println("<style>");
-        writer.println("body { font-family: Arial; background:#f4f6f8; padding:40px; }");
-        writer.println(".container { max-width:600px; margin:auto; }");
-        writer.println(".card { background:white; padding:20px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.1);} ");
-        writer.println("li { margin:10px 0; }");
-        writer.println("a { display:block; margin-top:10px; color:#3498db; }");
-        writer.println("</style>");
-
-        writer.println("</head><body>");
+        writer.println("@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');");
+        writer.println("body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; margin: 0; padding: 40px 20px; color: #1e293b; line-height: 1.6; }");
+        writer.println(".container { max-width: 1000px; margin: auto; }");
+        writer.println(".header-bar { background: #0f172a; color: white; padding: 40px; border-radius: 24px 24px 0 0; }");
+        writer.println(".header-bar h2 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -1px; }");
+        writer.println(".card { background: white; padding: 30px; border-radius: 0 0 24px 24px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #f1f5f9; border-top: none; }");
+        writer.println(".alert { padding: 15px; border-radius: 12px; margin-bottom: 25px; font-size: 14px; font-weight: 600; border: 1px solid; }");
+        writer.println(".alert-success { background: #dcfce7; color: #166534; border-color: #bbf7d0; }");
+        writer.println(".alert-error { background: #fee2e2; color: #991b1b; border-color: #fecaca; }");
+        writer.println("ul { list-style: none; padding: 0; margin: 0; }");
+        writer.println("li { display: flex; justify-content: space-between; align-items: center; padding: 20px; margin-bottom: 16px; background: #ffffff; border: 1px solid #f1f5f9; border-radius: 16px; transition: all 0.3s ease; }");
+        writer.println("li:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1); }");
+        writer.println(".record-content { display: flex; align-items: center; gap: 20px; flex-grow: 1; }");
+        writer.println(".id-badge { background: #eff6ff; color: #2563eb; padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; border: 1px solid #dbeafe; }");
+        writer.println(".book-title { color: #1e293b; font-weight: 600; font-size: 16px; }");
+        writer.println(".book-meta { color: #94a3b8; font-size: 13px; }");
+        writer.println(".btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px; transition: 0.2s; border: none; cursor: pointer; }");
+        writer.println(".btn-return { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; }");
+        writer.println(".btn-return:hover { background: #e11d48; color: white; }");
+        writer.println(".btn-borrow { background: #2563eb; color: white; }");
+        writer.println(".btn-fines { background: #059669; color: white; }");
+        writer.println(".btn-back { background: #f1f5f9; color: #475569; }");
+        writer.println(".actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; justify-content: center; border-top: 1px solid #f1f5f9; padding-top: 30px; }");
+        writer.println("</style></head><body>");
 
         writer.println("<div class='container'>");
+        writer.println("<div class='header-bar'><h2>" + ("ADMIN".equals(role) ? "System Administration: Borrow Logs" : "My Borrowed Library") + "</h2></div>");
         writer.println("<div class='card'>");
 
-        if ("ADMIN".equals(role)) {
-            writer.println("<h2> All Borrowed Books</h2>");
-        } else {
-            writer.println("<h2> My Borrowed Books</h2>");
+        // Handle Messages
+        String status = req.getParameter("status");
+        String error = req.getParameter("error");
+        if ("success".equals(status)) {
+            writer.println("<div class='alert alert-success'>✅ Book returned and record finalized.</div>");
+        } else if (error != null) {
+            writer.println("<div class='alert alert-error'>❌ Transaction failed: " + error + "</div>");
         }
 
         if (borrowedList == null || borrowedList.isEmpty()) {
-            writer.println("<p>No borrowed books found.</p>");
+            writer.println("<p style='text-align:center; color:#94a3b8; padding:60px 0;'>📭 No active borrowed books found.</p>");
         } else {
             writer.println("<ul>");
             for (String record : borrowedList) {
-                writer.println("<li>" + record + "</li>");
+                // Parsing logic matches our updated BorrowDAO formats
+                String[] parts = record.split("\\|");
+                String id = "N/A", title = "Unknown", meta = "";
+
+                for (String part : parts) {
+                    if (part.contains("ID:")) id = part.replace("ID:", "").trim();
+                    else if (part.contains("Book:") || part.contains("Title:")) {
+                        title = part.replace("Book:", "").replace("Title:", "").trim();
+                    }
+                    else meta += part.trim() + " ";
+                }
+
+                writer.println("<li>");
+                writer.println("<div class='record-content'>");
+                writer.println("  <span class='id-badge'>#" + id + "</span>");
+                writer.println("  <div style='display:flex; flex-direction:column;'>");
+                writer.println("    <span class='book-title'>" + title + "</span>");
+                writer.println("    <span class='book-meta'>" + meta + "</span>");
+                writer.println("  </div>");
+                writer.println("</div>");
+
+                if ("ADMIN".equals(role)) {
+                    writer.println("<form action='" + contextPath + "/return' method='POST' style='margin:0;'>");
+                    writer.println("<input type='hidden' name='borrowId' value='" + id + "'>");
+                    writer.println("<button type='submit' class='btn btn-return' onclick=\"return confirm('Confirm book return for #" + id + "?')\">Return</button>");
+                    writer.println("</form>");
+                }
+                writer.println("</li>");
             }
             writer.println("</ul>");
         }
 
-        writer.println("</div>");
-
-        writer.println("<a href='borrow'>Borrow a Book</a>");
-        writer.println("<a href='books'>Back to Books</a>");
-
-        writer.println("</div>");
-        writer.println("</body></html>");
+        writer.println("<div class='actions'>");
+        if (!"ADMIN".equals(role)) {
+            writer.println("<a href='borrow' class='btn btn-borrow'> Borrow another book</a>");
+        }
+        writer.println("<a href='fines' class='btn btn-fines'>Fine Dashboard</a>");
+        writer.println("<a href='books' class='btn btn-back'>Return to Catalog</a>");
+        writer.println("</div></div></div></body></html>");
     }
 }
