@@ -1,5 +1,7 @@
 package app;
 
+// ✅ CORRECTED IMPORT: LibraryService is in package 'app', not 'app.ejbs'
+import app.LibraryService;
 import jakarta.inject.Inject;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -31,9 +33,10 @@ public class BorrowedBooks extends HttpServlet {
         resp.setContentType("text/html;charset=UTF-8");
         PrintWriter writer = resp.getWriter();
 
-        // Data Source: Admin sees everything, Members see their own
+        // ✅ DATA SOURCE: Admin sees the master log; Members see their personal active loans
         List<String> borrowedList;
         if ("ADMIN".equals(role)) {
+            // These methods now match LibraryService.java exactly
             borrowedList = libraryService.getAdminBorrowedRecords();
         } else {
             borrowedList = libraryService.getMemberActiveLoans(username);
@@ -58,7 +61,7 @@ public class BorrowedBooks extends HttpServlet {
         writer.println(".book-title { color: #1e293b; font-weight: 600; font-size: 16px; }");
         writer.println(".book-meta { color: #94a3b8; font-size: 13px; }");
         writer.println(".btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px; transition: 0.2s; border: none; cursor: pointer; }");
-        writer.println(".btn-return { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; }");
+        writer.println(".btn-return { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; font-family: inherit; }");
         writer.println(".btn-return:hover { background: #e11d48; color: white; }");
         writer.println(".btn-borrow { background: #2563eb; color: white; }");
         writer.println(".btn-fines { background: #059669; color: white; }");
@@ -70,11 +73,11 @@ public class BorrowedBooks extends HttpServlet {
         writer.println("<div class='header-bar'><h2>" + ("ADMIN".equals(role) ? "System Administration: Borrow Logs" : "My Borrowed Library") + "</h2></div>");
         writer.println("<div class='card'>");
 
-        // Handle Messages
+        // Handle Messages from Return Process
         String status = req.getParameter("status");
         String error = req.getParameter("error");
         if ("success".equals(status)) {
-            writer.println("<div class='alert alert-success'>✅ Book returned and record finalized.</div>");
+            writer.println("<div class='alert alert-success'>✅ Book returned and available inventory updated.</div>");
         } else if (error != null) {
             writer.println("<div class='alert alert-error'>❌ Transaction failed: " + error + "</div>");
         }
@@ -84,16 +87,17 @@ public class BorrowedBooks extends HttpServlet {
         } else {
             writer.println("<ul>");
             for (String record : borrowedList) {
-                // Parsing logic matches our updated BorrowDAO formats
                 String[] parts = record.split("\\|");
                 String id = "N/A", title = "Unknown", meta = "";
 
                 for (String part : parts) {
-                    if (part.contains("ID:")) id = part.replace("ID:", "").trim();
-                    else if (part.contains("Book:") || part.contains("Title:")) {
+                    if (part.contains("ID:")) {
+                        id = part.replace("ID:", "").trim();
+                    } else if (part.contains("Book:") || part.contains("Title:")) {
                         title = part.replace("Book:", "").replace("Title:", "").trim();
+                    } else if (part.contains("User:") || part.contains("left") || part.contains("OVERDUE") || part.contains("Title:")) {
+                        meta += part.trim() + " ";
                     }
-                    else meta += part.trim() + " ";
                 }
 
                 writer.println("<li>");
@@ -108,7 +112,7 @@ public class BorrowedBooks extends HttpServlet {
                 if ("ADMIN".equals(role)) {
                     writer.println("<form action='" + contextPath + "/return' method='POST' style='margin:0;'>");
                     writer.println("<input type='hidden' name='borrowId' value='" + id + "'>");
-                    writer.println("<button type='submit' class='btn btn-return' onclick=\"return confirm('Confirm book return for #" + id + "?')\">Return</button>");
+                    writer.println("<button type='submit' class='btn btn-return' onclick=\"return confirm('Confirm book return for record #" + id + "? Inventory will be restocked.')\">Process Return</button>");
                     writer.println("</form>");
                 }
                 writer.println("</li>");
@@ -118,7 +122,7 @@ public class BorrowedBooks extends HttpServlet {
 
         writer.println("<div class='actions'>");
         if (!"ADMIN".equals(role)) {
-            writer.println("<a href='borrow' class='btn btn-borrow'> Borrow another book</a>");
+            writer.println("<a href='books' class='btn btn-borrow'> Borrow another book</a>");
         }
         writer.println("<a href='fines' class='btn btn-fines'>Fine Dashboard</a>");
         writer.println("<a href='books' class='btn btn-back'>Return to Catalog</a>");

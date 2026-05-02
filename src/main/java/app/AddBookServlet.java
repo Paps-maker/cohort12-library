@@ -3,7 +3,7 @@ package app;
 import app.dao.BookDAO;
 import app.model.Book;
 import app.validation.BookValidator;
-import app.validation.ValidatorQualifier; //  Consistently using  custom qualifier
+import app.validation.ValidatorQualifier;
 import jakarta.inject.Inject;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebServlet;
@@ -11,17 +11,16 @@ import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.io.PrintWriter;
 
+/**
+ * ADD BOOK SERVLET
+ * Manages the addition of new titles and their initial physical stock.
+ */
 @WebServlet("/addbook")
 public class AddBookServlet extends HttpServlet {
 
     @Inject
     private BookDAO bookDAO;
 
-    /**
-     *  STRATEGY-BASED INJECTION
-     * The qualifier ensures the container provides the specific BookValidator
-     * implementation assigned to the 'BOOK' choice.
-     */
     @Inject
     @ValidatorQualifier(ValidatorQualifier.ValidationChoice.BOOK)
     private BookValidator validator;
@@ -39,75 +38,87 @@ public class AddBookServlet extends HttpServlet {
 
         out.println("<!DOCTYPE html><html><head><title>Library | Add New Book</title>");
         out.println("<style>");
-        out.println("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }");
-        out.println(".box { background: white; padding: 40px; border-radius: 16px; width: 100%; max-width: 450px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); text-align: center; }");
-        out.println("h2 { color: #1e293b; margin-bottom: 24px; font-weight: 700; }");
-        out.println("input, textarea { width: 100%; padding: 14px; margin: 12px 0; border: 1px solid #e2e8f0; border-radius: 10px; box-sizing: border-box; font-size: 15px; transition: border 0.3s; }");
-        out.println("input:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }");
-        out.println(".btn-primary { width: 100%; padding: 14px; border: none; border-radius: 10px; background: #1e293b; color: white; font-weight: 600; cursor: pointer; transition: 0.2s; margin-top: 10px; }");
-        out.println(".btn-primary:hover { background: #334155; transform: translateY(-1px); }");
-        out.println(".success-msg { color: #059669; font-weight: bold; margin-bottom: 20px; font-size: 18px; background: #ecfdf5; padding: 15px; border-radius: 10px; }");
-        out.println(".options { display: flex; gap: 12px; justify-content: center; margin-top: 25px; }");
-        out.println(".btn-nav { padding: 12px 20px; text-decoration: none; border-radius: 10px; font-size: 14px; color: white; font-weight: 600; transition: 0.2s; }");
-        out.println(".btn-list { background: #3b82f6; } .btn-list:hover { background: #2563eb; }");
-        out.println(".btn-add { background: #64748b; } .btn-add:hover { background: #475569; }");
-        out.println(".error { color: #dc2626; background: #fef2f2; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-size: 14px; border: 1px solid #fee2e2; }");
+        out.println("@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');");
+        out.println("body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }");
+        out.println(".box { background: white; padding: 40px; border-radius: 24px; width: 100%; max-width: 450px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); text-align: center; border: 1px solid #e2e8f0; }");
+        out.println("h2 { color: #0f172a; margin-bottom: 24px; font-weight: 800; letter-spacing: -1px; }");
+        out.println("input, textarea { width: 100%; padding: 14px; margin: 12px 0; border: 1px solid #e2e8f0; border-radius: 12px; box-sizing: border-box; font-size: 15px; font-family: inherit; transition: 0.2s; }");
+        out.println("input:focus, textarea:focus { outline: none; border-color: #2563eb; ring: 2px solid #dbeafe; }");
+        out.println(".btn-primary { width: 100%; padding: 14px; border: none; border-radius: 12px; background: #0f172a; color: white; font-weight: 700; cursor: pointer; margin-top: 10px; transition: 0.2s; }");
+        out.println(".btn-primary:hover { background: #1e293b; transform: translateY(-1px); }");
+        out.println(".success-msg { color: #065f46; font-weight: 700; margin-bottom: 20px; font-size: 16px; background: #dcfce7; padding: 15px; border-radius: 12px; border: 1px solid #bbf7d0; }");
+        out.println(".error { color: #991b1b; background: #fee2e2; padding: 12px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #fecaca; font-size: 14px; font-weight: 600; }");
+        out.println(".label-left { text-align: left; display: block; font-weight: 700; color: #475569; font-size: 13px; margin-top: 10px; text-transform: uppercase; letter-spacing: 0.5px; }");
+        out.println(".btn-secondary { display: inline-block; text-decoration: none; background: #f1f5f9; color: #475569; padding: 12px 24px; border-radius: 12px; font-weight: 700; font-size: 14px; margin-top: 20px; }");
         out.println("</style></head><body>");
 
         out.println("<div class='box'>");
 
         if (success != null && success) {
-            out.println("<div class='success-msg'>✅ Book Added Successfully!</div>");
-            out.println("<p style='color: #64748b;'>The catalog has been updated.</p>");
-            out.println("<div class='options'>");
-            out.println("<a href='" + contextPath + "/books' class='btn-nav btn-list'>View Catalog</a>");
-            out.println("<a href='" + contextPath + "/addbook' class='btn-nav btn-add'>Add Another</a>");
-            out.println("</div>");
+            out.println("<div class='success-msg'>✅ Book & Inventory Initialized!</div>");
+            out.println("<p style='color:#64748b;'>The title has been added and stock is now available for borrowing.</p>");
+            out.println("<a href='books' class='btn-secondary'>View Updated Catalog</a>");
         } else {
             out.println("<h2>Add New Book</h2>");
-            if (error != null) {
-                out.println("<div class='error'>⚠️ " + error + "</div>");
-            }
+            if (error != null) out.println("<div class='error'>⚠️ " + error + "</div>");
 
             out.println("<form action='" + contextPath + "/addbook' method='post'>");
+            out.println("<label class='label-left'>Book Information</label>");
             out.println("<input type='text' name='title' placeholder='Book Title' required>");
-            out.println("<input type='text' name='imageUrl' placeholder='Image URL (http...)'>");
-            out.println("<textarea name='description' placeholder='Short description of the book...' rows='4'></textarea>");
+            out.println("<input type='text' name='imageUrl' placeholder='Cover Image URL'>");
+            out.println("<textarea name='description' placeholder='Short Synopsis...' rows='3'></textarea>");
+
+            out.println("<label class='label-left'>Initial Physical Stock (Copies)</label>");
+            out.println("<input type='number' name='copies' value='1' min='1' max='50' required>");
+
             out.println("<button type='submit' class='btn-primary'>Save to Catalog</button>");
+            out.println("<a href='books' style='display:block; margin-top:15px; font-size:13px; color:#64748b; text-decoration:none;'>Cancel</a>");
             out.println("</form>");
-            out.println("<div style='margin-top:20px;'><a href='books' style='color:#94a3b8; text-decoration:none; font-size: 14px;'>Cancel and Return</a></div>");
         }
 
-        out.println("</div>");
-        out.println("</body></html>");
+        out.println("</div></body></html>");
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        // 1. Capture parameters
         String title = request.getParameter("title");
         String imageUrl = request.getParameter("imageUrl");
         String description = request.getParameter("description");
+        String copiesStr = request.getParameter("copies");
 
-        // 2. Business Validation (Using injected validator)
+        int copies = 1;
+        try {
+            copies = (copiesStr != null) ? Integer.parseInt(copiesStr) : 1;
+        } catch (NumberFormatException e) {
+            request.setAttribute("error", "Invalid number of copies.");
+            doGet(request, response);
+            return;
+        }
+
+        // Validate the book data
         String validationError = validator.validate(title, imageUrl, description);
 
         if (validationError == null) {
             Book newBook = new Book(title, imageUrl, description);
-            boolean added = bookDAO.addBook(newBook);
+
+            /*
+             * ✅ CALLS UPDATED DAO:
+             * This method now handles setting both total_quantity and available_copies
+             * to the 'copies' value, ensuring your dashboard starts at 0 borrowed.
+             */
+            boolean added = bookDAO.addBookWithCopies(newBook, copies);
 
             if (added) {
                 request.setAttribute("success", true);
             } else {
-                request.setAttribute("error", "Database Error: Could not save to storage.");
+                request.setAttribute("error", "Synopsis should no more than 500");
             }
         } else {
             request.setAttribute("error", validationError);
         }
 
-        // Forward back to doGet to render success or error message
         doGet(request, response);
     }
 }

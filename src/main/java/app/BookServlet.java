@@ -8,6 +8,8 @@ import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @WebServlet("/books")
 public class BookServlet extends HttpServlet {
@@ -33,12 +35,21 @@ public class BookServlet extends HttpServlet {
         response.setContentType("text/html");
         PrintWriter out = response.getWriter();
 
-        // DATA FETCHING
+        // --- SERVER-SIDE DATE CALCULATION ---
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE, MMM dd, yyyy");
+        String formattedDate = now.format(formatter);
+
+        // DATA FETCHING (Logic preserved)
         List<Book> allBooks = libraryService.getAllBooks();
-        int totalBooks = allBooks.size();
+        int totalUniqueTitles = allBooks.size();
+        int totalPhysicalCopies = allBooks.stream().mapToInt(Book::getQuantity).sum();
         int availableCount = libraryService.getAvailableCount();
-        int displayBorrowedCount = libraryService.getBorrowedCountForUser(username, role);
-        String borrowedLabel = libraryService.getBorrowedLabel(role);
+        int totalSystemBorrowed = totalPhysicalCopies - availableCount;
+        int userBorrowedCount = libraryService.getBorrowedCountForUser(username, role);
+
+        int displayBorrowedCount = "ADMIN".equals(role) ? totalSystemBorrowed : userBorrowedCount;
+        String borrowedLabel = "ADMIN".equals(role) ? "Total Copies Borrowed" : "My Borrowed Books";
 
         double totalOwed;
         String fineLabel;
@@ -56,47 +67,41 @@ public class BookServlet extends HttpServlet {
         out.println("<!DOCTYPE html>");
         out.println("<html><head><title>Library Dashboard</title>");
 
-        // CLEAN WHITE THEME CSS - NO HOVER REQUIRED
         out.println("<style>");
         out.println(":root { --primary: #1e3c72; --secondary: #2a5298; --bg: #ffffff; --card-bg: #f8fafc; --text: #334155; }");
         out.println("body { font-family:'Segoe UI', system-ui, sans-serif; margin:0; background:var(--bg); color:var(--text); }");
         out.println(".header { background: linear-gradient(135deg, #1e3c72, #2a5298); color:white; padding:20px; text-align:center; font-size:22px; font-weight:bold; }");
-        out.println(".container { max-width: 1200px; margin: auto; padding: 20px; }");
 
+        // Time Card Styling
+        out.println(".time-container { display: flex; justify-content: center; margin-top: -15px; margin-bottom: 20px; }");
+        out.println(".time-card { background: #1e293b; color: white; padding: 12px 25px; border-radius: 0 0 15px 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); text-align: center; border: 1px solid rgba(255,255,255,0.1); border-top: none; }");
+        out.println(".time-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; opacity: 0.7; font-weight: 800; }");
+        out.println(".time-value { font-size: 15px; font-weight: 700; margin-top: 2px; }");
+
+        out.println(".container { max-width: 1200px; margin: auto; padding: 20px; }");
         out.println(".welcome-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }");
         out.println(".welcome { font-size: 18px; color: #1e293b; font-weight: 600; }");
         out.println(".fine-alert { background: #fee2e2; color: #b91c1c; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: bold; text-decoration: none; border: 1px solid #fecaca; }");
-
         out.println(".stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }");
         out.println(".stat-card { background: var(--card-bg); padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center; }");
         out.println(".stat-title { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; }");
         out.println(".stat-value { font-size: 22px; font-weight: 800; color: var(--primary); }");
-
         out.println(".library-title { font-size: 20px; font-weight: 700; margin-bottom: 20px; color: #1e293b; border-left: 4px solid var(--secondary); padding-left: 10px; }");
-
-        // GRID SETUP
         out.println(".shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }");
-
-        // CARD DESIGN (STATIC)
         out.println(".book { background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; display: flex; flex-direction: column; transition: box-shadow 0.3s; }");
         out.println(".book:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }");
-
         out.println(".book-cover { width: 100%; height: 260px; object-fit: cover; background: #f1f5f9; border-bottom: 1px solid #f1f5f9; }");
-
         out.println(".book-details { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }");
         out.println(".book-title { font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 5px; min-height: 40px; }");
         out.println(".book-description { font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }");
-
         out.println(".badge { font-size: 10px; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; display: inline-block; margin-bottom: 5px; }");
         out.println(".bg-green { background: #dcfce7; color: #166534; }");
         out.println(".bg-red { background: #fee2e2; color: #991b1b; }");
         out.println(".wait-text { font-size: 11px; color: #ef4444; font-weight: 600; margin-bottom: 10px; display: block; }");
-
         out.println(".book-actions { display: flex; gap: 8px; margin-top: auto; }");
         out.println(".btn-edit, .btn-delete { flex: 1; text-align: center; font-size: 11px; padding: 7px; border-radius: 4px; text-decoration: none; color: white; font-weight: bold; }");
         out.println(".btn-edit { background: #3b82f6; }");
         out.println(".btn-delete { background: #ef4444; }");
-
         out.println(".links { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 10px; }");
         out.println(".links a { padding: 10px 20px; border-radius: 6px; text-decoration: none; font-size: 13px; font-weight: 600; background: #f1f5f9; color: #1e293b; border: 1px solid #e2e8f0; transition: 0.2s; }");
         out.println(".links a:hover { background: var(--secondary); color: white; }");
@@ -104,7 +109,18 @@ public class BookServlet extends HttpServlet {
 
         out.println("</head><body>");
 
-        out.println("<div class='header'> SCHOOL LIBRARY SYSTEM </div>");
+        // Header
+        out.println("<div class='header'> SCHOOL LIBRARY </div>");
+
+        // 🕒 NEW: TIME CARD BELOW HEADER
+        out.println("<div class='time-container'>");
+        out.println("    <div class='time-card'>");
+        out.println("        <div class='time-title'></div>");
+        out.println("        <div class='time-value'>" + formattedDate + "</div>");
+        out.println("        <div id='clock' style='font-size: 13px; opacity: 0.9; margin-top: 4px; font-family: monospace;'></div>");
+        out.println("    </div>");
+        out.println("</div>");
+
         out.println("<div class='container'>");
 
         out.println("<div class='welcome-row'>");
@@ -119,9 +135,9 @@ public class BookServlet extends HttpServlet {
 
         out.println("<div class='stats'>");
         out.println("<div class='stat-card'><div class='stat-title'>Active Users</div><div class='stat-value'><span id='activeUsers'>...</span></div></div>");
-        out.println("<div class='stat-card'><div class='stat-title'>Total Books</div><div class='stat-value'>" + totalBooks + "</div></div>");
+        out.println("<div class='stat-card'><div class='stat-title'>Total Titles</div><div class='stat-value'>" + totalUniqueTitles + "</div></div>");
         out.println("<div class='stat-card'><div class='stat-title'>" + borrowedLabel + "</div><div class='stat-value'>" + displayBorrowedCount + "</div></div>");
-        out.println("<div class='stat-card'><div class='stat-title'>Available Now</div><div class='stat-value'>" + availableCount + "</div></div>");
+        out.println("<div class='stat-card'><div class='stat-title'>Copies Available</div><div class='stat-value'>" + availableCount + "</div></div>");
         out.println("</div>");
 
         out.println("<div class='library'>");
@@ -129,22 +145,24 @@ public class BookServlet extends HttpServlet {
         out.println("<div class='shelf'>");
 
         for (Book book : allBooks) {
-            boolean isAvailable = libraryService.isBookAvailable(book.getId());
+            int remaining = book.getAvailableCopies();
+            boolean isAvailable = remaining > 0;
+
             String imgUrl = (book.getImageUrl() != null && !book.getImageUrl().isEmpty()) ? book.getImageUrl() : "https://via.placeholder.com/300x450?text=No+Cover";
             String desc = (book.getDescription() != null && !book.getDescription().isEmpty()) ? book.getDescription() : "No description provided.";
 
             out.println("<div class='book'>");
             out.println("<img src='" + imgUrl + "' class='book-cover' alt='Book Cover'>");
-
             out.println("<div class='book-details'>");
 
             if (!isAvailable) {
-                out.println("<span class='badge bg-red'>Borrowed</span>");
+                out.println("<span class='badge bg-red'>All copies borrowed</span>");
                 int daysLeft = libraryService.getDaysUntilAvailable(book.getTitle());
-                String waitMsg = (daysLeft > 0) ? "Available in " + daysLeft + " days" : "Return in process..";
+                String waitMsg = (daysLeft > 0) ? "Available in " + daysLeft + " days" : "check back later";
                 out.println("<span class='wait-text'>" + waitMsg + "</span>");
             } else {
-                out.println("<span class='badge bg-green'>Available</span>");
+                String copyLabel = (remaining == 1) ? "1 Copy Left" : remaining + " Copies Left";
+                out.println("<span class='badge bg-green'>" + copyLabel + "</span>");
             }
 
             out.println("<div class='book-title'>" + book.getTitle() + "</div>");
@@ -176,6 +194,16 @@ public class BookServlet extends HttpServlet {
         out.println("</div>");
 
         out.println("<script>");
+        // JS Clock Logic
+        out.println("function updateClock() {");
+        out.println("    const now = new Date();");
+        out.println("    const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});");
+        out.println("    const clockEl = document.getElementById('clock');");
+        out.println("    if(clockEl) clockEl.innerHTML = '' + timeString;");
+        out.println("}");
+        out.println("setInterval(updateClock, 1000); updateClock();");
+
+        // Active Users Fetch
         out.println("function loadUsers() {");
         out.println("  fetch('active-users')");
         out.println("    .then(r => { if (r.redirected) { window.location.reload(); return; } return r.text(); })");

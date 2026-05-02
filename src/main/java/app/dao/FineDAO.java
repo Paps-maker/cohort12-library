@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 /**
  * DATA ACCESS OBJECT: FINES
- * Manages database interactions for recorded debts.
+ * Synchronized with the multi-copy inventory system to show book titles in fine history.
  */
 @ApplicationScoped
 public class FineDAO {
@@ -57,11 +57,16 @@ public class FineDAO {
     }
 
     /**
-     * ✅ MEMBER VIEW: Returns formatted list for history display.
+     * ✅ MEMBER VIEW: Returns formatted list for history display with Book Titles.
      */
     public List<String> getUserFines(String username) {
         List<String> list = new ArrayList<>();
-        String sql = "SELECT id, amount, status, created_at FROM fine WHERE username = ? ORDER BY created_at DESC";
+        // Relational Join: fine -> borrowedbook -> book
+        String sql = "SELECT f.id, f.amount, f.status, f.created_at, bk.title " +
+                "FROM fine f " +
+                "LEFT JOIN borrowedbook b ON f.borrowId = b.id " +
+                "LEFT JOIN book bk ON b.bookId = bk.id " +
+                "WHERE f.username = ? ORDER BY f.created_at DESC";
 
         try (Connection con = getMySQLCon();
              PreparedStatement ps = con.prepareStatement(sql)) {
@@ -72,11 +77,13 @@ public class FineDAO {
                     int id = rs.getInt("id");
                     String status = rs.getString("status");
                     double amt = rs.getDouble("amount");
+                    String title = rs.getString("title");
                     Timestamp ts = rs.getTimestamp("created_at");
 
                     String row = "ID: " + id + " | ";
+                    row += (title != null) ? "Book: " + title + " | " : "Book: [Removed] | ";
                     row += (amt == 0) ? "Returned on time" : "Fine: KSH " + String.format("%.2f", amt);
-                    row += " | Status: " + status + " | Date: " + (ts != null ? ts.toString() : "N/A");
+                    row += " | Status: " + status + " | Date: " + (ts != null ? ts.toLocalDateTime().toLocalDate().toString() : "N/A");
 
                     list.add(row);
                 }
@@ -88,19 +95,26 @@ public class FineDAO {
     }
 
     /**
-     * ✅ ADMIN VIEW: Returns overview of all fines in the system.
+     * ✅ ADMIN VIEW: Returns overview of all fines with book context and user info.
      */
     public List<String> getAllFines() {
         List<String> list = new ArrayList<>();
-        String sql = "SELECT id, username, amount, status, created_at FROM fine ORDER BY created_at DESC";
+        String sql = "SELECT f.id, f.username, f.amount, f.status, bk.title " +
+                "FROM fine f " +
+                "LEFT JOIN borrowedbook b ON f.borrowId = b.id " +
+                "LEFT JOIN book bk ON b.bookId = bk.id " +
+                "ORDER BY f.created_at DESC";
 
         try (Connection con = getMySQLCon();
              PreparedStatement ps = con.prepareStatement(sql)) {
             if (con == null) return list;
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
+                    String title = rs.getString("title");
+                    String bookInfo = (title != null) ? " | Book: " + title : " | Book: [N/A]";
+
                     list.add("ID: " + rs.getInt("id") + " | User: " + rs.getString("username").toUpperCase() +
-                            " | KSH " + String.format("%.2f", rs.getDouble("amount")) +
+                            bookInfo + " | KSH " + String.format("%.2f", rs.getDouble("amount")) +
                             " | Status: " + rs.getString("status"));
                 }
             }
@@ -122,8 +136,7 @@ public class FineDAO {
             ps.setString(1, username);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
-                    double total = rs.getDouble(1);
-                    return rs.wasNull() ? 0.0 : total;
+                    return rs.getDouble(1);
                 }
             }
         } catch (Exception e) {
@@ -138,8 +151,7 @@ public class FineDAO {
              Statement s = con.createStatement();
              ResultSet rs = s.executeQuery(sql)) {
             if (rs.next()) {
-                double total = rs.getDouble(1);
-                return rs.wasNull() ? 0.0 : total;
+                return rs.getDouble(1);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -163,7 +175,6 @@ public class FineDAO {
             ps.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
-            System.err.println("❌ FineDAO: Error inserting fine record for " + username);
             e.printStackTrace();
             return false;
         }
@@ -177,7 +188,6 @@ public class FineDAO {
             ps.setInt(1, fineId);
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
-            System.err.println("❌ FineDAO: Error processing payment for ID: " + fineId);
             e.printStackTrace();
         }
         return false;
@@ -187,9 +197,6 @@ public class FineDAO {
     // SECTION 4: DELETE OPERATIONS
     // =========================================================================
 
-    /**
-     * ✅ NEW: Supports the Admin delete button.
-     */
     public boolean deleteFine(int fineId) {
         String sql = "DELETE FROM fine WHERE id = ?";
         try (Connection con = getMySQLCon();
@@ -198,7 +205,6 @@ public class FineDAO {
             ps.setInt(1, fineId);
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
-            System.err.println("❌ FineDAO: Error deleting fine record ID: " + fineId);
             e.printStackTrace();
             return false;
         }

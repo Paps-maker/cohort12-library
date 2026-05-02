@@ -1,7 +1,7 @@
 package app.validation;
 
 import app.dao.BorrowDAO;
-import jakarta.inject.Inject;           // ✅ Use this
+import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.enterprise.context.RequestScoped;
 
@@ -12,7 +12,6 @@ import jakarta.enterprise.context.RequestScoped;
 @RequestScoped
 public class ReturnValidator {
 
-    // ✅ FIXED: Inject the DAO so WildFly can provide the Database Connection
     @Inject
     private BorrowDAO borrowDao;
 
@@ -32,24 +31,20 @@ public class ReturnValidator {
         }
 
         try {
-            // Clean the ID just in case the Servlet missed a character
+            // Clean the ID (removes # or spaces if present)
             int borrowId = Integer.parseInt(borrowIdStr.replaceAll("[^0-9]", ""));
 
-            // 3. Existence Check
-            // This will now work because borrowDao is no longer null!
+            // 3. Existence & State Check (Merged)
+            // In a relational system, if the record is gone from the 'borrowed' table,
+            // it means the book is already back in the 'inventory'.
             if (!borrowDao.exists(borrowId)) {
-                return "Record Error: Transaction #" + borrowId + " not found in database.";
-            }
-
-            // 4. State Check
-            if (borrowDao.isAlreadyReturned(borrowId)) {
-                return "Status Error: This book has already been marked as returned.";
+                return "Status Error: Transaction #" + borrowId + " not found or already returned.";
             }
 
         } catch (NumberFormatException e) {
             return "Format Error: Transaction ID [" + borrowIdStr + "] must be numeric.";
         }
 
-        return null;
+        return null; // Validation passed
     }
 }

@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 
 /**
  * SERVICE LAYER (Business Logic Facade)
- * Now coordinates access via specialized Stateless EJBs.
+ * Fully synchronized with the updated BookDAO inventory logic.
  */
 @ApplicationScoped
 public class LibraryService {
@@ -34,7 +34,6 @@ public class LibraryService {
     @Inject
     private FineDAO fineDao;
 
-    // EJB Injections
     @Inject
     private CatalogBean catalogBean;
 
@@ -50,7 +49,7 @@ public class LibraryService {
     private ReturnValidator returnValidator;
 
     /**
-     * NO-ARGS CONSTRUCTOR (CDI requirement)
+     * Default constructor for CDI proxying.
      */
     protected LibraryService() {
         this.fineValidator = null;
@@ -58,7 +57,7 @@ public class LibraryService {
     }
 
     /**
-     * CONSTRUCTOR INJECTION
+     * Constructor injection for required validators.
      */
     @Inject
     public LibraryService(
@@ -79,71 +78,117 @@ public class LibraryService {
     }
 
     // =========================================================================
-    // SECTION 1: CATALOG & DASHBOARD (Delegated to CatalogBean)
+    // SECTION 1: CATALOG & DASHBOARD
     // =========================================================================
 
     public List<Book> getAllBooks() {
-        return catalogBean.getAllBooks();
+        return bookDao.getAllBooks();
     }
 
     public int getAvailableCount() {
-        return catalogBean.calculateAvailableCount();
+        return bookDao.getAllBooks().stream()
+                .mapToInt(Book::getAvailableCopies)
+                .sum();
     }
 
+    /**
+     * ✅ UPDATED CALCULATION:
+     * Ensures "Total Copies Borrowed" decreases when a return increments available_copies.
+     */
     public int getBorrowedCountForUser(String username, String role) {
-        return catalogBean.getBorrowedCount(username, role);
+        if ("ADMIN".equals(role)) {
+            List<Book> books = bookDao.getAllBooks();
+            // Total Borrowed = (Sum of Total Physical Stock) - (Sum of Currently Available)
+            int totalOwned = books.stream().mapToInt(Book::getTotalQuantity).sum();
+            int totalAvailable = books.stream().mapToInt(Book::getAvailableCopies).sum();
+            return Math.max(0, totalOwned - totalAvailable);
+        }
+        return borrowDao.getMemberLoanCount(username);
     }
 
     public String getBorrowedLabel(String role) {
-        return "ADMIN".equals(role) ? "Total Borrowed" : "My Borrowed";
+        return "ADMIN".equals(role) ? "Total Copies Borrowed" : "My Borrowed Books";
     }
 
     public int getDaysUntilAvailable(String bookTitle) {
         return borrowDao.getDaysLeft(bookTitle);
     }
 
+    public boolean isBookAvailable(int bookId) {
+        return bookDao.getAvailableCopiesCount(bookId) > 0;
+    }
+
+    /**
+     * Utility to determine if a loan UI should show a warning based on status text.
+     */
+    public boolean isLoanUrgent(String statusText) {
+        if (statusText == null) return false;
+        String upper = statusText.toUpperCase();
+        return upper.contains("OVERDUE") || upper.contains("DUE TODAY") || upper.contains("1 DAY LEFT");
+    }
+
     // =========================================================================
-    // SECTION 2: BORROWING (CLEAN ATOMIC TRANSACTION)
+    // SECTION 2: FINES & DEBT
     // =========================================================================
 
     public double getUnpaidFines(String username) {
         return fineDao.getTotalUnpaid(username);
     }
 
-    public boolean isBookAvailable(int bookId) {
-        return !borrowDao.isBookBorrowed(bookId);
+    public double getProjectedLateFees(String username) {
+        double currentDebt = fineDao.getTotalUnpaid(username);
+        double projected = fineBean.getProjectedDebt(username);
+        return Math.max(0, projected - currentDebt);
     }
 
-    /**
-     * The primary entry point for borrowing.
-     * Handles validation and DB insertion via BorrowingBean in one step.
-     * @return null on success, or an error message on failure.
-     */
+    public double getTotalSystemRiskDebt() {
+        return fineBean.getSystemTotalRisk();
+    }
+
+    // =========================================================================
+    // SECTION 3: INVENTORY & OPERATIONS
+    // =========================================================================
+
+    public List<String> getAdminBorrowedRecords() {
+        return borrowDao.getAllBorrowed();
+    }
+
+    public List<String> getMemberActiveLoans(String username) {
+        return borrowDao.getUserBorrowed(username);
+    }
+
     public String attemptBorrow(String username, String role, String bookIdParam, String daysParam) {
         if ("ADMIN".equals(role)) return "Administrative accounts cannot borrow.";
-        if (bookIdParam == null || bookIdParam.isEmpty()) return "Please choose a book.";
+        if (bookIdParam == null || bookIdParam.trim().isEmpty()) return "Please choose a book.";
 
         try {
             int bookId = Integer.parseInt(bookIdParam);
             int days = Integer.parseInt(daysParam);
 
-            // The EJB ensures the transaction is atomic and checks availability/fines/limits
+            if (!isBookAvailable(bookId)) {
+                return "Checkout Blocked: This book is currently out of stock.";
+            }
+
             return borrowingBean.validateAndBorrow(username, bookId, days);
         } catch (NumberFormatException e) {
             return "Invalid format for book selection or duration.";
         }
     }
-    // =========================================================================
-    // SECTION 3: RETURNS (Delegated to BorrowingBean)
-    // =========================================================================
 
     public String processReturnRequest(String role, String borrowIdParam) {
         return borrowingBean.processReturn(role, borrowIdParam);
     }
 
-    // =========================================================================
-    // SECTION 4: FINES & ROLE-BASED HISTORY (Delegated to FineBean)
-    // =========================================================================
+    /**
+     * ✅ UPDATED: Specifically uses the isAdminUpdate flag to differentiate
+     * between adding NEW physical stock vs. returning an existing book.
+     */
+    public boolean addCopies(int bookId, int amount) {
+        // If amount is 1, it's a standard return (no change to total library capacity)
+        // If amount > 1, we assume the Admin is adding new physical inventory to the collection
+        boolean isAdminAction = (amount > 1 || amount < -1);
+        return bookDao.updateInventory(bookId, amount, isAdminAction);
+    }
 
     public boolean processFinePayment(String username, String fineIdParam) {
         return fineBean.payFine(username, fineIdParam);
@@ -153,34 +198,16 @@ public class LibraryService {
         return fineBean.deleteFine(fineId);
     }
 
-    public List<String> getAdminBorrowedRecords() { return borrowDao.getAllBorrowed(); }
-
-    public List<String> getMemberActiveLoans(String username) { return borrowDao.getUserBorrowed(username); }
-
-    public List<String> getMemberFineHistory(String username) { return fineDao.getUserFines(username); }
+    public List<String> getMemberFineHistory(String username) {
+        return fineDao.getUserFines(username);
+    }
 
     public List<String> getAdminFineHistory() {
         return fineDao.getAllFines().stream().map(fine -> {
             if (fine.contains("Status: UNPAID")) {
-                return fine.replace("Status: UNPAID", "UNPAID FINES");
+                return fine.replace("Status: UNPAID", "🚨 UNPAID FINES");
             }
             return fine;
         }).collect(Collectors.toList());
-    }
-
-    public boolean isLoanUrgent(String daysStr) {
-        return catalogBean.isLoanUrgent(daysStr);
-    }
-
-    // =========================================================================
-    // SECTION 5: REAL-TIME DEBT CALCULATIONS (Delegated to FineBean)
-    // =========================================================================
-
-    public double getProjectedLateFees(String username) {
-        return fineBean.getProjectedDebt(username) - fineDao.getTotalUnpaid(username);
-    }
-
-    public double getTotalSystemRiskDebt() {
-        return fineBean.getSystemTotalRisk();
     }
 }

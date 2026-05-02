@@ -5,7 +5,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 import app.model.Book;
-import app.validation.ValidatorQualifier;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
@@ -14,10 +13,6 @@ import java.util.List;
 @LoginRequired
 public class borrow extends HttpServlet {
 
-    /**
-     * ✅ CDI MANAGED INJECTION
-     * Provides the shared LibraryService facade.
-     */
     @Inject
     private LibraryService libraryService;
 
@@ -69,6 +64,7 @@ public class borrow extends HttpServlet {
         writer.println("<option value='' disabled selected>-- Search Collection --</option>");
 
         for (Book book : books) {
+            // ✅ UPDATED: Pass book.getId() to match the relational service signature
             if (libraryService.isBookAvailable(book.getId())) {
                 writer.println("<option value='" + book.getId() + "'>" + book.getTitle() + "</option>");
             }
@@ -102,15 +98,13 @@ public class borrow extends HttpServlet {
         String bookIdParam = req.getParameter("bookId");
         String daysParam = req.getParameter("days");
 
-        // ✅ ONE-SHOT TRANSACTION
-        // attemptBorrow handles validation AND the database insert in a single call to the EJB.
+        // ✅ UPDATED: attemptBorrow will now parse the bookIdParam as an int
+        // and link it to the book_id column in the borrows table.
         String result = libraryService.attemptBorrow(username, role, bookIdParam, daysParam);
 
         if (result == null) {
-            // Success (EJB returned null)
             showResponsePage(resp, "Success", "Book checked out! Return within " + daysParam + " days to avoid late fees.", true);
         } else {
-            // Failure (EJB returned a validation error message)
             showResponsePage(resp, "Checkout Blocked", result, false);
         }
     }
