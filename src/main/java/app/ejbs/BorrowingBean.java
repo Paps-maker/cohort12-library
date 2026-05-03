@@ -72,9 +72,10 @@ public class BorrowingBean {
             String member = borrowDao.getMemberByBorrowId(borrowId);
             int daysLate = borrowDao.getOverdueDays(borrowId);
 
-            // Create fine record if returned late (Example: $50.0 per day)
+            // Create fine record if returned late (Example: KSH 50.0 per day)
             if (daysLate > 0 && member != null) {
-                fineDao.insertFine(member, daysLate * 50.0, daysLate, borrowId);
+                // ✅ UPDATED: Passing bookId as the 5th argument to match updated FineDAO
+                fineDao.insertFine(member, daysLate * 50.0, daysLate, borrowId, bookId);
             }
 
             // ✅ Delete the borrow record and increment physical inventory count

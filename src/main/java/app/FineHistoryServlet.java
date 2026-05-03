@@ -99,7 +99,7 @@ public class FineHistoryServlet extends HttpServlet {
         // 1. BALANCE SECTION
         if (displayTotal > 0) {
             writer.println("<div class='total-owed'>");
-            writer.println(role.equals("ADMIN") ? "🚨 SYSTEM-WIDE OUTSTANDING: " : "💰 CURRENT BALANCE: ");
+            writer.println(role.equals("ADMIN") ? "🚨 FINES OUTSTANDING: " : "💰 CURRENT BALANCE: ");
             writer.println("KSH " + String.format("%.2f", displayTotal));
             writer.println("</div>");
         }
@@ -160,7 +160,7 @@ public class FineHistoryServlet extends HttpServlet {
                     if ("ADMIN".equals(role)) {
                         writer.println("<form action='" + contextPath + "/delete-fine' method='POST' style='margin:0;'>");
                         writer.println("<input type='hidden' name='fineId' value='" + idPart + "'>");
-                        writer.println("<button type='submit' class='btn btn-delete' onclick='return confirm(\"Delete this financial record permanently?\")'>Purge Record</button>");
+                        writer.println("<button type='submit' class='btn btn-delete' onclick='return confirm(\"Delete this financial record permanently?\")'>Delete Record</button>");
                         writer.println("</form>");
                     } else if (isUnpaid) {
                         writer.println("<form action='" + contextPath + "/pay-fine' method='POST' style='margin:0;'>");

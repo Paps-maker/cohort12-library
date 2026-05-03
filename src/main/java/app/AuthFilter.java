@@ -28,6 +28,8 @@ public class AuthFilter implements Filter {
                 path.equals("/index.jsp") ||
                 path.equals("/register.jsp") ||
                 path.equals("/registerProcess") ||
+                path.equals("/contact.jsp") ||        // The form page
+                path.equals("/contactdisplay.jsp") || // The form action target
                 path.equals("/addbook"); // Matches @WebServlet("/addbook")
 
         // Allow static assets so the UI stays styled

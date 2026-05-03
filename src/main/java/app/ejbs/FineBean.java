@@ -58,10 +58,11 @@ public class FineBean {
     }
 
     /**
-     * ✅ UPDATED: System-wide Financial Risk
-     * Calculates all unpaid fines in the system plus all accumulating late fees.
+     * ✅ FIXED: System-wide Financial Risk
+     * Calls getSystemTotalUnpaid() which is now present in the updated FineDAO.
      */
     public double getSystemTotalRisk() {
+        // Matches the method name in your updated FineDAO to fix the 'cannot find symbol' error
         double totalUnpaidFines = fineDao.getSystemTotalUnpaid();
 
         // getAllBorrowed now correctly joins physical copies but still returns IDs
@@ -78,7 +79,8 @@ public class FineBean {
         for (String record : records) {
             try {
                 // Extracts the "ID: X" part of the formatted string from BorrowDAO
-                int borrowId = Integer.parseInt(record.split("\\|")[0].replace("ID:", "").trim());
+                String[] parts = record.split("\\|");
+                int borrowId = Integer.parseInt(parts[0].replace("ID:", "").trim());
 
                 // Uses the updated BorrowDAO method that checks due_date vs now
                 int lateDays = borrowDao.getOverdueDays(borrowId);

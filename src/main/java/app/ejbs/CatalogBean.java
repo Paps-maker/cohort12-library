@@ -17,46 +17,49 @@ public class CatalogBean {
     private BorrowDAO borrowDao;
 
     /**
-     * Fetches all books from the database.
-     * The BookDAO now populates quantity fields automatically.
+     * Matches LibraryService.getAllBooks() logic.
      */
-    public List<Book> getAllBooks() {
+    public List<Book> getAvailableBooks() {
         return bookDao.getAllBooks();
     }
 
     /**
-     * ✅ OPTIMIZED: Sums up available units.
-     * Uses the field already mapped in the Book model to avoid
-     * repetitive "N+1" database queries.
+     * Matches LibraryService.getAvailableCount() call.
+     * Sums up available_copies across all titles.
      */
-    public int calculateAvailableCount() {
+    public int getTotalAvailableCopies() {
         return bookDao.getAllBooks().stream()
                 .mapToInt(Book::getAvailableCopies)
                 .sum();
     }
 
     /**
-     * Calculates borrowing statistics for the dashboard cards.
+     * Matches LibraryService.getBorrowedCountForUser(..., "ADMIN") call.
+     * Calculates: Total System Capacity - Current Available Stock.
      */
-    public int getBorrowedCount(String username, String role) {
-        if ("ADMIN".equals(role)) {
-            // Returns total active loans in the system
-            return borrowDao.getMemberLoanCount(null);
-        } else {
-            // Returns only loans for the specific user
-            return borrowDao.getMemberLoanCount(username);
-        }
+    public int getSystemBorrowedCount() {
+        List<Book> books = bookDao.getAllBooks();
+        int totalPhysicalInventory = books.stream().mapToInt(Book::getTotalQuantity).sum();
+        int currentAvailable = books.stream().mapToInt(Book::getAvailableCopies).sum();
+
+        // The difference is what is currently in the hands of users
+        return Math.max(0, totalPhysicalInventory - currentAvailable);
     }
 
     /**
-     * Helper to determine if a return date is dangerously close (0-1 days or late).
+     * Legacy helper if you still use username-specific counts inside this bean.
+     */
+    public int getMemberBorrowedCount(String username) {
+        return borrowDao.getMemberLoanCount(username);
+    }
+
+    /**
+     * Helper to determine if a return date is dangerously close.
      */
     public boolean isLoanUrgent(String daysStr) {
         if (daysStr == null || daysStr.trim().isEmpty()) return false;
-
         String normalized = daysStr.toUpperCase();
 
-        // Mark as urgent if overdue or returning in 0 or 1 days
         return normalized.contains("OVERDUE") ||
                 normalized.contains("0 DAYS") ||
                 normalized.contains("1 DAY") ||

@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 
 /**
  * DATA ACCESS OBJECT: FINES
- * Synchronized with the multi-copy inventory system to show book titles in fine history.
+ * Updated to use direct bookId linking for permanent title display.
  */
 @ApplicationScoped
 public class FineDAO {
@@ -32,6 +32,9 @@ public class FineDAO {
     // SECTION 1: RETRIEVAL
     // =========================================================================
 
+    /**
+     * ✅ Used by FineValidator to check payment eligibility.
+     */
     public Fine getFineById(int fineId) {
         String sql = "SELECT * FROM fine WHERE id = ?";
         try (Connection con = getMySQLCon();
@@ -57,15 +60,14 @@ public class FineDAO {
     }
 
     /**
-     * ✅ MEMBER VIEW: Returns formatted list for history display with Book Titles.
+     * ✅ MEMBER VIEW: Joins directly to Book table via bookId.
      */
     public List<String> getUserFines(String username) {
         List<String> list = new ArrayList<>();
-        // Relational Join: fine -> borrowedbook -> book
+        // Now using f.bookId to ensure title persists after return
         String sql = "SELECT f.id, f.amount, f.status, f.created_at, bk.title " +
                 "FROM fine f " +
-                "LEFT JOIN borrowedbook b ON f.borrowId = b.id " +
-                "LEFT JOIN book bk ON b.bookId = bk.id " +
+                "LEFT JOIN book bk ON f.bookId = bk.id " +
                 "WHERE f.username = ? ORDER BY f.created_at DESC";
 
         try (Connection con = getMySQLCon();
@@ -81,7 +83,7 @@ public class FineDAO {
                     Timestamp ts = rs.getTimestamp("created_at");
 
                     String row = "ID: " + id + " | ";
-                    row += (title != null) ? "Book: " + title + " | " : "Book: [Removed] | ";
+                    row += (title != null) ? "Book: " + title + " | " : "Book: [Deleted Title] | ";
                     row += (amt == 0) ? "Returned on time" : "Fine: KSH " + String.format("%.2f", amt);
                     row += " | Status: " + status + " | Date: " + (ts != null ? ts.toLocalDateTime().toLocalDate().toString() : "N/A");
 
@@ -95,14 +97,13 @@ public class FineDAO {
     }
 
     /**
-     * ✅ ADMIN VIEW: Returns overview of all fines with book context and user info.
+     * ✅ ADMIN VIEW: Permanent title lookup via bookId.
      */
     public List<String> getAllFines() {
         List<String> list = new ArrayList<>();
         String sql = "SELECT f.id, f.username, f.amount, f.status, bk.title " +
                 "FROM fine f " +
-                "LEFT JOIN borrowedbook b ON f.borrowId = b.id " +
-                "LEFT JOIN book bk ON b.bookId = bk.id " +
+                "LEFT JOIN book bk ON f.bookId = bk.id " +
                 "ORDER BY f.created_at DESC";
 
         try (Connection con = getMySQLCon();
@@ -111,10 +112,10 @@ public class FineDAO {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     String title = rs.getString("title");
-                    String bookInfo = (title != null) ? " | Book: " + title : " | Book: [N/A]";
+                    String bookName = (title != null) ? title : "[Unknown/Deleted]";
 
                     list.add("ID: " + rs.getInt("id") + " | User: " + rs.getString("username").toUpperCase() +
-                            bookInfo + " | KSH " + String.format("%.2f", rs.getDouble("amount")) +
+                            " | Book: " + bookName + " | KSH " + String.format("%.2f", rs.getDouble("amount")) +
                             " | Status: " + rs.getString("status"));
                 }
             }
@@ -135,9 +136,7 @@ public class FineDAO {
             if (con == null) return 0.0;
             ps.setString(1, username);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getDouble(1);
-                }
+                if (rs.next()) return rs.getDouble(1);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -145,14 +144,15 @@ public class FineDAO {
         return 0.0;
     }
 
+    /**
+     * ✅ Used by FineBean to calculate system-wide risk.
+     */
     public double getSystemTotalUnpaid() {
         String sql = "SELECT SUM(amount) FROM fine WHERE status = 'UNPAID'";
         try (Connection con = getMySQLCon();
              Statement s = con.createStatement();
              ResultSet rs = s.executeQuery(sql)) {
-            if (rs.next()) {
-                return rs.getDouble(1);
-            }
+            if (rs.next()) return rs.getDouble(1);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -163,8 +163,11 @@ public class FineDAO {
     // SECTION 3: WRITE OPERATIONS
     // =========================================================================
 
-    public boolean insertFine(String username, double amount, int daysOverdue, int borrowId) {
-        String sql = "INSERT INTO fine (username, amount, daysOverdue, borrowId, status, created_at) VALUES (?, ?, ?, ?, 'UNPAID', ?)";
+    /**
+     * ✅ FIXED: Added bookId parameter to match BorrowingBean call.
+     */
+    public boolean insertFine(String username, double amount, int daysOverdue, int borrowId, int bookId) {
+        String sql = "INSERT INTO fine (username, amount, daysOverdue, borrowId, bookId, status, created_at) VALUES (?, ?, ?, ?, ?, 'UNPAID', ?)";
         try (Connection con = getMySQLCon();
              PreparedStatement ps = con.prepareStatement(sql)) {
             if (con == null) return false;
@@ -172,7 +175,8 @@ public class FineDAO {
             ps.setDouble(2, amount);
             ps.setInt(3, daysOverdue);
             ps.setInt(4, borrowId);
-            ps.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
+            ps.setInt(5, bookId);
+            ps.setTimestamp(6, Timestamp.valueOf(LocalDateTime.now()));
             return ps.executeUpdate() > 0;
         } catch (Exception e) {
             e.printStackTrace();

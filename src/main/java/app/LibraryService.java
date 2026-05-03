@@ -78,30 +78,31 @@ public class LibraryService {
     }
 
     // =========================================================================
-    // SECTION 1: CATALOG & DASHBOARD
+    // SECTION 1: CATALOG & DASHBOARD (Updated to use CatalogBean)
     // =========================================================================
 
+    /**
+     * Fetches all books using the CatalogBean.
+     */
     public List<Book> getAllBooks() {
-        return bookDao.getAllBooks();
-    }
-
-    public int getAvailableCount() {
-        return bookDao.getAllBooks().stream()
-                .mapToInt(Book::getAvailableCopies)
-                .sum();
+        return catalogBean.getAvailableBooks();
     }
 
     /**
-     * ✅ UPDATED CALCULATION:
-     * Ensures "Total Copies Borrowed" decreases when a return increments available_copies.
+     * Gets the global sum of available physical copies.
+     */
+    public int getAvailableCount() {
+        return catalogBean.getTotalAvailableCopies();
+    }
+
+    /**
+     * Determines borrowed count based on role.
+     * Admin: Total system-wide active loans.
+     * Member: Personal active loans.
      */
     public int getBorrowedCountForUser(String username, String role) {
         if ("ADMIN".equals(role)) {
-            List<Book> books = bookDao.getAllBooks();
-            // Total Borrowed = (Sum of Total Physical Stock) - (Sum of Currently Available)
-            int totalOwned = books.stream().mapToInt(Book::getTotalQuantity).sum();
-            int totalAvailable = books.stream().mapToInt(Book::getAvailableCopies).sum();
-            return Math.max(0, totalOwned - totalAvailable);
+            return catalogBean.getSystemBorrowedCount();
         }
         return borrowDao.getMemberLoanCount(username);
     }
@@ -118,15 +119,11 @@ public class LibraryService {
         return bookDao.getAvailableCopiesCount(bookId) > 0;
     }
 
-    /**
-     * Utility to determine if a loan UI should show a warning based on status text.
-     */
     public boolean isLoanUrgent(String statusText) {
         if (statusText == null) return false;
         String upper = statusText.toUpperCase();
         return upper.contains("OVERDUE") || upper.contains("DUE TODAY") || upper.contains("1 DAY LEFT");
     }
-
     // =========================================================================
     // SECTION 2: FINES & DEBT
     // =========================================================================
@@ -205,7 +202,7 @@ public class LibraryService {
     public List<String> getAdminFineHistory() {
         return fineDao.getAllFines().stream().map(fine -> {
             if (fine.contains("Status: UNPAID")) {
-                return fine.replace("Status: UNPAID", "🚨 UNPAID FINES");
+                return fine.replace("Status: UNPAID", " UNPAID FINES");
             }
             return fine;
         }).collect(Collectors.toList());

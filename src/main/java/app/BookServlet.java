@@ -56,7 +56,7 @@ public class BookServlet extends HttpServlet {
 
         if ("ADMIN".equals(role)) {
             totalOwed = libraryService.getTotalSystemRiskDebt();
-            fineLabel = "SYSTEM DEBT: KSH ";
+            fineLabel = "Outstanding FINES: KSH ";
         } else {
             double recordedFines = libraryService.getUnpaidFines(username);
             double projectedFines = libraryService.getProjectedLateFees(username);
@@ -112,7 +112,7 @@ public class BookServlet extends HttpServlet {
         // Header
         out.println("<div class='header'> SCHOOL LIBRARY </div>");
 
-        // 🕒 NEW: TIME CARD BELOW HEADER
+        //  NEW: TIME CARD BELOW HEADER
         out.println("<div class='time-container'>");
         out.println("    <div class='time-card'>");
         out.println("        <div class='time-title'></div>");
