@@ -12,9 +12,11 @@ import app.validation.BorrowValidator;
 import app.validation.FineValidator;
 import app.validation.ReturnValidator;
 import app.validation.ValidatorQualifier;
+import app.events.LibraryEvent; // ✅ Corrected Import
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event; // ✅ Added for Event firing
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,6 +44,9 @@ public class LibraryService {
 
     @Inject
     private FineBean fineBean;
+
+    @Inject
+    private Event<LibraryEvent> eventPublisher; // ✅ Added Event Publisher
 
     private final FineValidator fineValidator;
     private final BorrowValidator borrowValidator;
@@ -81,25 +86,14 @@ public class LibraryService {
     // SECTION 1: CATALOG & DASHBOARD (Updated to use CatalogBean)
     // =========================================================================
 
-    /**
-     * Fetches all books using the CatalogBean.
-     */
     public List<Book> getAllBooks() {
         return catalogBean.getAvailableBooks();
     }
 
-    /**
-     * Gets the global sum of available physical copies.
-     */
     public int getAvailableCount() {
         return catalogBean.getTotalAvailableCopies();
     }
 
-    /**
-     * Determines borrowed count based on role.
-     * Admin: Total system-wide active loans.
-     * Member: Personal active loans.
-     */
     public int getBorrowedCountForUser(String username, String role) {
         if ("ADMIN".equals(role)) {
             return catalogBean.getSystemBorrowedCount();
@@ -166,7 +160,17 @@ public class LibraryService {
                 return "Checkout Blocked: This book is currently out of stock.";
             }
 
-            return borrowingBean.validateAndBorrow(username, bookId, days);
+            // 1. Perform the business logic
+            String result = borrowingBean.validateAndBorrow(username, bookId, days);
+
+            // 2. ✅ Fire Event if successful
+            if (result != null && result.contains("Success")) {
+                // Matches constructor: LibraryEvent(type, email, bookTitle, status)
+                eventPublisher.fire(new LibraryEvent("BORROW", username, "Book ID: " + bookId, result));
+                System.out.println(">>> LibraryService: Borrow Event Fired for " + username);
+            }
+
+            return result;
         } catch (NumberFormatException e) {
             return "Invalid format for book selection or duration.";
         }
@@ -176,13 +180,7 @@ public class LibraryService {
         return borrowingBean.processReturn(role, borrowIdParam);
     }
 
-    /**
-     * ✅ UPDATED: Specifically uses the isAdminUpdate flag to differentiate
-     * between adding NEW physical stock vs. returning an existing book.
-     */
     public boolean addCopies(int bookId, int amount) {
-        // If amount is 1, it's a standard return (no change to total library capacity)
-        // If amount > 1, we assume the Admin is adding new physical inventory to the collection
         boolean isAdminAction = (amount > 1 || amount < -1);
         return bookDao.updateInventory(bookId, amount, isAdminAction);
     }

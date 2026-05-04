@@ -64,7 +64,6 @@ public class borrow extends HttpServlet {
         writer.println("<option value='' disabled selected>-- Search Collection --</option>");
 
         for (Book book : books) {
-            // ✅ UPDATED: Pass book.getId() to match the relational service signature
             if (libraryService.isBookAvailable(book.getId())) {
                 writer.println("<option value='" + book.getId() + "'>" + book.getTitle() + "</option>");
             }
@@ -98,14 +97,15 @@ public class borrow extends HttpServlet {
         String bookIdParam = req.getParameter("bookId");
         String daysParam = req.getParameter("days");
 
-        // ✅ UPDATED: attemptBorrow will now parse the bookIdParam as an int
-        // and link it to the book_id column in the borrows table.
+        // Call service: internal logic handles database, inventory, and firing the Email Event
         String result = libraryService.attemptBorrow(username, role, bookIdParam, daysParam);
 
-        if (result == null) {
-            showResponsePage(resp, "Success", "Book checked out! Return within " + daysParam + " days to avoid late fees.", true);
+        // ✅ Updated Logic: The service now returns a descriptive string.
+        // We check if it indicates success.
+        if (result != null && result.contains("Success")) {
+            showResponsePage(resp, "Success", result, true);
         } else {
-            showResponsePage(resp, "Checkout Blocked", result, false);
+            showResponsePage(resp, "Checkout Blocked", result != null ? result : "An error occurred during checkout.", false);
         }
     }
 

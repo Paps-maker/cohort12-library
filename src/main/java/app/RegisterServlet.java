@@ -2,6 +2,8 @@ package app;
 
 import app.dao.UserDAO;
 import app.model.User;
+import app.events.LibraryEvent; // ✅ Added Import
+import jakarta.enterprise.event.Event; // ✅ Added Import
 import jakarta.inject.Inject;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebServlet;
@@ -10,13 +12,16 @@ import java.io.IOException;
 
 /**
  * SECURE REGISTRATION PROCESS
- * Uses an "Authorized Whitelist" strategy to prevent unauthorized sign-ups.
+ * Now includes automated Email Notifications upon successful signup.
  */
 @WebServlet("/registerProcess")
 public class RegisterServlet extends HttpServlet {
 
     @Inject
     private UserDAO userDAO;
+
+    @Inject
+    private Event<LibraryEvent> eventPublisher; // ✅ Injected for Email Notifications
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
@@ -29,18 +34,15 @@ public class RegisterServlet extends HttpServlet {
         String password = request.getParameter("password");
 
         // 1. WHITELIST VERIFICATION
-        // Instead of checking the domain string, we check the database for pre-approval.
         String whitelistedRole = userDAO.getWhitelistedRole(email);
 
         if (whitelistedRole == null) {
-            // SECURITY: The email is not in the 'authorized_emails' table.
             request.setAttribute("status", "not_authorized");
             request.getRequestDispatcher("registerdisplay.jsp").forward(request, response);
             return;
         }
 
         // 2. DUPLICATE CHECK
-        // Ensure the authorized email hasn't already been used to create an account.
         if (userDAO.emailExists(email)) {
             request.setAttribute("status", "email_taken");
             request.getRequestDispatcher("registerdisplay.jsp").forward(request, response);
@@ -48,11 +50,19 @@ public class RegisterServlet extends HttpServlet {
         }
 
         // 3. FINAL REGISTRATION
-        // We use the 'whitelistedRole' retrieved from the DB, not a user-provided one.
         User newUser = new User(username, email, password, whitelistedRole);
         boolean success = userDAO.createUser(newUser);
 
         if (success) {
+            // ✅ FIRE WELCOME EMAIL EVENT
+            // This triggers your LibraryObserver to send the Gmail notification
+            eventPublisher.fire(new LibraryEvent(
+                    "REGISTER",
+                    email,
+                    "Account Created Successfully as: " + whitelistedRole,
+                    "Active"
+            ));
+
             request.setAttribute("username", username);
             request.setAttribute("email", email);
             request.setAttribute("status", "success");

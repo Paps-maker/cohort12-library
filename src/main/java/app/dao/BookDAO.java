@@ -19,7 +19,7 @@ public class BookDAO {
         try {
             return mysqlDataSource.getConnection();
         } catch (SQLException e) {
-            System.err.println("❌ BookDAO: MySQL Connection Error");
+            System.err.println(" BookDAO: MySQL Connection Error");
             return null;
         }
     }
@@ -28,7 +28,7 @@ public class BookDAO {
         try {
             return DBConnection.getPostgresConnection();
         } catch (Exception e) {
-            System.err.println("⚠️ BookDAO: PostgreSQL Connection Failed (Backup DB)");
+            System.err.println(" BookDAO: PostgreSQL Connection Failed (Backup DB)");
             return null;
         }
     }
@@ -36,6 +36,25 @@ public class BookDAO {
     // =========================================================================
     // SECTION 1: INVENTORY & STOCK MANAGEMENT
     // =========================================================================
+
+    /**
+     * ✅ FIXES: "cannot find symbol: method getBookTitleById(int)"
+     * Fetches only the title string for efficient email notification generation.
+     */
+    public String getBookTitleById(int bookId) {
+        String sql = "SELECT title FROM book WHERE id = ?";
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            if (con == null) return "Unknown Book";
+            ps.setInt(1, bookId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getString("title");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return "Unknown Book";
+    }
 
     public boolean addBookWithCopies(Book book, int copies) {
         String sql = "INSERT INTO book(title, imageUrl, description, total_quantity, available_copies) VALUES(?, ?, ?, ?, ?)";
@@ -71,21 +90,11 @@ public class BookDAO {
         return 0;
     }
 
-    /**
-     * ✅ UPDATED: Handles Borrowing, Returning, and Admin Restocking correctly.
-     * @param bookId The ID of the book.
-     * @param change The change amount:
-     *               +1 (Return), -1 (Borrow), or +N (Admin adding new stock).
-     * @param isAdminUpdate If true, updates BOTH total and available.
-     *                      If false, only updates available (Borrow/Return).
-     */
     public boolean updateInventory(int bookId, int change, boolean isAdminUpdate) {
         String sql;
         if (isAdminUpdate) {
-            // Admin adding new physical books to the library system
             sql = "UPDATE book SET total_quantity = total_quantity + ?, available_copies = available_copies + ? WHERE id = ?";
         } else {
-            // Standard transaction: Borrowing (-1) or Returning (+1)
             sql = "UPDATE book SET available_copies = available_copies + ? WHERE id = ?";
         }
 
@@ -109,13 +118,7 @@ public class BookDAO {
         }
     }
 
-    /**
-     * ✅ BACKWARD COMPATIBILITY:
-     * Keeps your existing service calls working while defaulting to transaction logic.
-     */
     public boolean addCopiesToExistingBook(int bookId, int amount) {
-        // If amount is 1 or -1, it's likely a transaction.
-        // If it's higher (e.g., adding 10 new books), it's an Admin update.
         boolean isAdmin = (amount > 1 || amount < -1);
         return updateInventory(bookId, amount, isAdmin);
     }
@@ -164,7 +167,7 @@ public class BookDAO {
     }
 
     // =========================================================================
-    // SECTION 3: UTILITIES & REFLECTION
+    // SECTION 3: UTILITIES & MIRRORING
     // =========================================================================
 
     private void executeMirrorWrite(Connection con, String sql, Book book, int total, int avail) {
@@ -177,7 +180,7 @@ public class BookDAO {
             ps.setInt(5, avail);
             ps.executeUpdate();
         } catch (Exception e) {
-            System.err.println("⚠️ BookDAO: Mirroring failed.");
+            System.err.println(" BookDAO: Mirroring failed.");
         }
     }
 

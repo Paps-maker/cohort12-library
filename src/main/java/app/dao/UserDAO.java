@@ -13,49 +13,69 @@ import java.util.List;
 @ApplicationScoped
 public class UserDAO {
 
-    // ✅ NEW: Injected from standalone.xml (Must match your JNDI name)
     @Resource(lookup = "java:jboss/datasources/LibraryDS")
     private DataSource mysqlDataSource;
 
-    // ✅ UPDATED: Now pulls from the WildFly Connection Pool
     private Connection getMySQLCon() {
         try {
             return mysqlDataSource.getConnection();
         } catch (SQLException e) {
-            System.err.println("❌ MySQL Pool Error: Ensure standalone.xml URL has library_2 (lowercase)");
+            System.err.println(" UserDAO: MySQL Pool Error");
             return null;
         }
     }
 
-    // ✅ KEEPING: Postgres stays manual as per your setup
     private Connection getPostgresCon() {
         return DBConnection.getPostgresConnection();
     }
 
     // =========================================================================
-    // SECTION 1: AUTHENTICATION (The Login Fix)
+    // SECTION 1: AUTHENTICATION & LOOKUP
     // =========================================================================
 
     public User findUser(String username, String password) {
-        // ✅ BACKTICKS: Used to ensure we target your table in library_2, not system tables
         String sql = "SELECT * FROM `user` WHERE username=? AND password=?";
-
         try (Connection con = getMySQLCon();
              PreparedStatement ps = con.prepareStatement(sql)) {
-
             if (con == null) return null;
             ps.setString(1, username);
             ps.setString(2, password);
-
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return mapUser(rs);
-                }
+                if (rs.next()) return mapUser(rs);
             }
         } catch (Exception e) {
-            System.err.println("❌ LOGIN QUERY FAILED");
             e.printStackTrace();
         }
+        return null;
+    }
+
+    public User findUserByUsername(String username) {
+        String sql = "SELECT * FROM `user` WHERE username=?";
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            if (con == null) return null;
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return mapUser(rs);
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return null;
+    }
+
+    /**
+     * ✅ NEW: Optimized for FineScheduler.
+     * Directly retrieves the email string associated with a username.
+     */
+    public String getEmailByUsername(String username) {
+        String sql = "SELECT email FROM `user` WHERE username = ?";
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            if (con == null) return null;
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getString("email");
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
         return null;
     }
 
@@ -67,11 +87,9 @@ public class UserDAO {
         String mysqlSql = "INSERT INTO `user`(username, email, password, role) VALUES(?,?,?,?)";
         String pgSql = "INSERT INTO \"user\"(username, email, password, role) VALUES(?,?,?,?)";
 
-        // Using try-with-resources internally via utility methods ensures closure
         boolean mysqlSaved = executeWrite(getMySQLCon(), mysqlSql, user.getUsername(), user.getEmail(), user.getPassword(), user.getRole());
         boolean postgresSaved = executeWrite(getPostgresCon(), pgSql, user.getUsername(), user.getEmail(), user.getPassword(), user.getRole());
 
-        System.out.println("📝 DUAL-INSERT: MySQL=" + mysqlSaved + " | Postgres=" + postgresSaved);
         return mysqlSaved || postgresSaved;
     }
 
@@ -96,19 +114,17 @@ public class UserDAO {
     }
 
     // =========================================================================
-    // SECTION 3: UTILITY METHODS (Correctly returning pooled connections)
+    // SECTION 3: UTILITY METHODS
     // =========================================================================
 
     private boolean executeWrite(Connection con, String sql, String... params) {
         if (con == null) return false;
-        try (con; PreparedStatement ps = con.prepareStatement(sql)) { // ✅ con inside try-with ensures it returns to pool
+        try (con; PreparedStatement ps = con.prepareStatement(sql)) {
             for (int i = 0; i < params.length; i++) {
                 ps.setString(i + 1, params[i]);
             }
             return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            return false;
-        }
+        } catch (Exception e) { return false; }
     }
 
     private boolean executeUpdate(Connection con, String sql, User user) {
@@ -119,9 +135,7 @@ public class UserDAO {
             ps.setString(3, user.getRole());
             ps.setInt(4, user.getId());
             return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            return false;
-        }
+        } catch (Exception e) { return false; }
     }
 
     private boolean executeDelete(Connection con, String sql, int id) {
@@ -129,9 +143,7 @@ public class UserDAO {
         try (con; PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setInt(1, id);
             return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            return false;
-        }
+        } catch (Exception e) { return false; }
     }
 
     private User mapUser(ResultSet rs) throws SQLException {
@@ -154,34 +166,31 @@ public class UserDAO {
         } catch (Exception e) { }
         return users;
     }
+
     public boolean emailExists(String email) {
-        String sql = "SELECT COUNT(*) FROM users WHERE email = ?";
-        try (Connection con = getMySQLCon(); // Use your existing connection method
+        String sql = "SELECT COUNT(*) FROM `user` WHERE email = ?";
+        try (Connection con = getMySQLCon();
              PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, email);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1) > 0;
-                }
+                if (rs.next()) return rs.getInt(1) > 0;
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } catch (SQLException e) { e.printStackTrace(); }
         return false;
     }
+
     public String getWhitelistedRole(String email) {
         String sql = "SELECT assigned_role FROM authorized_emails WHERE email = ?";
         try (Connection con = getMySQLCon();
              PreparedStatement ps = con.prepareStatement(sql)) {
             ps.setString(1, email);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getString("assigned_role"); // Return the role (STUDENT/TEACHER)
-                }
+                if (rs.next()) return rs.getString("assigned_role");
             }
         } catch (SQLException e) { e.printStackTrace(); }
-        return null; // Email is not whitelisted
+        return null;
     }
+
     public User getUserById(int id) {
         String sql = "SELECT * FROM `user` WHERE id=?";
         try (Connection con = getMySQLCon();

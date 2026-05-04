@@ -23,7 +23,7 @@ public class FineDAO {
         try {
             return dataSource.getConnection();
         } catch (SQLException e) {
-            System.err.println("❌ FineDAO: Connection failed from WildFly Pool");
+            System.err.println(" FineDAO: Connection failed from WildFly Pool");
             return null;
         }
     }
@@ -33,7 +33,7 @@ public class FineDAO {
     // =========================================================================
 
     /**
-     * ✅ Used by FineValidator to check payment eligibility.
+     *  Used by FineValidator to check payment eligibility.
      */
     public Fine getFineById(int fineId) {
         String sql = "SELECT * FROM fine WHERE id = ?";
@@ -60,7 +60,7 @@ public class FineDAO {
     }
 
     /**
-     * ✅ MEMBER VIEW: Joins directly to Book table via bookId.
+     *  MEMBER VIEW: Joins directly to Book table via bookId.
      */
     public List<String> getUserFines(String username) {
         List<String> list = new ArrayList<>();
@@ -97,7 +97,7 @@ public class FineDAO {
     }
 
     /**
-     * ✅ ADMIN VIEW: Permanent title lookup via bookId.
+     *  ADMIN VIEW: Permanent title lookup via bookId.
      */
     public List<String> getAllFines() {
         List<String> list = new ArrayList<>();
@@ -145,7 +145,7 @@ public class FineDAO {
     }
 
     /**
-     * ✅ Used by FineBean to calculate system-wide risk.
+     *  Used by FineBean to calculate system-wide risk.
      */
     public double getSystemTotalUnpaid() {
         String sql = "SELECT SUM(amount) FROM fine WHERE status = 'UNPAID'";
@@ -164,7 +164,7 @@ public class FineDAO {
     // =========================================================================
 
     /**
-     * ✅ FIXED: Added bookId parameter to match BorrowingBean call.
+     *  FIXED: Added bookId parameter to match BorrowingBean call.
      */
     public boolean insertFine(String username, double amount, int daysOverdue, int borrowId, int bookId) {
         String sql = "INSERT INTO fine (username, amount, daysOverdue, borrowId, bookId, status, created_at) VALUES (?, ?, ?, ?, ?, 'UNPAID', ?)";
