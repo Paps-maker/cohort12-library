@@ -1,6 +1,5 @@
 package app;
 
-// ✅ CORRECTED IMPORT: LibraryService is in package 'app', not 'app.ejbs'
 import app.LibraryService;
 import jakarta.inject.Inject;
 import jakarta.servlet.ServletException;
@@ -8,7 +7,7 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.List;
+import java.util.*;
 
 @WebServlet("/borrowed")
 public class BorrowedBooks extends HttpServlet {
@@ -33,99 +32,108 @@ public class BorrowedBooks extends HttpServlet {
         resp.setContentType("text/html;charset=UTF-8");
         PrintWriter writer = resp.getWriter();
 
-        // ✅ DATA SOURCE: Admin sees the master log; Members see their personal active loans
         List<String> borrowedList;
         if ("ADMIN".equals(role)) {
-            // These methods now match LibraryService.java exactly
             borrowedList = libraryService.getAdminBorrowedRecords();
         } else {
             borrowedList = libraryService.getMemberActiveLoans(username);
         }
 
-        writer.println("<!DOCTYPE html><html><head><title>Library | Dashboard</title>");
+        writer.println("<!DOCTYPE html><html><head><title>Library | View Loans</title>");
         writer.println("<style>");
         writer.println("@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');");
-        writer.println("body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; margin: 0; padding: 40px 20px; color: #1e293b; line-height: 1.6; }");
-        writer.println(".container { max-width: 1000px; margin: auto; }");
-        writer.println(".header-bar { background: #0f172a; color: white; padding: 40px; border-radius: 24px 24px 0 0; }");
-        writer.println(".header-bar h2 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -1px; }");
-        writer.println(".card { background: white; padding: 30px; border-radius: 0 0 24px 24px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #f1f5f9; border-top: none; }");
-        writer.println(".alert { padding: 15px; border-radius: 12px; margin-bottom: 25px; font-size: 14px; font-weight: 600; border: 1px solid; }");
-        writer.println(".alert-success { background: #dcfce7; color: #166534; border-color: #bbf7d0; }");
-        writer.println(".alert-error { background: #fee2e2; color: #991b1b; border-color: #fecaca; }");
-        writer.println("ul { list-style: none; padding: 0; margin: 0; }");
-        writer.println("li { display: flex; justify-content: space-between; align-items: center; padding: 20px; margin-bottom: 16px; background: #ffffff; border: 1px solid #f1f5f9; border-radius: 16px; transition: all 0.3s ease; }");
-        writer.println("li:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1); }");
-        writer.println(".record-content { display: flex; align-items: center; gap: 20px; flex-grow: 1; }");
-        writer.println(".id-badge { background: #eff6ff; color: #2563eb; padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 800; border: 1px solid #dbeafe; }");
-        writer.println(".book-title { color: #1e293b; font-weight: 600; font-size: 16px; }");
-        writer.println(".book-meta { color: #94a3b8; font-size: 13px; }");
-        writer.println(".btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; text-decoration: none; border-radius: 12px; font-weight: 600; font-size: 14px; transition: 0.2s; border: none; cursor: pointer; }");
-        writer.println(".btn-return { background: #fff1f2; color: #e11d48; border: 1px solid #ffe4e6; font-family: inherit; }");
-        writer.println(".btn-return:hover { background: #e11d48; color: white; }");
-        writer.println(".btn-borrow { background: #2563eb; color: white; }");
-        writer.println(".btn-fines { background: #059669; color: white; }");
-        writer.println(".btn-back { background: #f1f5f9; color: #475569; }");
-        writer.println(".actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; justify-content: center; border-top: 1px solid #f1f5f9; padding-top: 30px; }");
+        writer.println("body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f1f5f9; margin: 0; padding: 40px 20px; color: #0f172a; }");
+        writer.println(".container { max-width: 1100px; margin: auto; }");
+        writer.println(".admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }");
+        writer.println(".admin-header h1 { font-size: 32px; font-weight: 800; letter-spacing: -1.5px; margin: 0; color: #1e293b; }");
+
+        writer.println(".user-section { background: white; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 30px; overflow: hidden; border: 1px solid #e2e8f0; }");
+        writer.println(".user-header { background: #f8fafc; padding: 20px 30px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; }");
+        writer.println(".user-avatar { background: #3b82f6; color: white; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; text-transform: uppercase; }");
+        writer.println(".user-name { font-weight: 700; font-size: 18px; color: #334155; }");
+
+        writer.println("table { width: 100%; border-collapse: collapse; background: white; }");
+        writer.println("th { text-align: left; padding: 16px 30px; background: #ffffff; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #f1f5f9; }");
+        writer.println("td { padding: 20px 30px; border-bottom: 1px solid #f8fafc; font-size: 15px; vertical-align: middle; }");
+        writer.println("tr:last-child td { border-bottom: none; }");
+
+        writer.println(".id-badge { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; }");
+        writer.println(".book-title { font-weight: 600; color: #1e293b; display: block; }");
+
+        // Updated Status Badges
+        writer.println(".status-pill { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }");
+        writer.println(".pill-overdue { color: #e11d48; background: #fff1f2; border: 1px solid #ffe4e6; }");
+        writer.println(".pill-ontime { color: #059669; background: #ecfdf5; border: 1px solid #d1fae5; }");
+
+        writer.println(".btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 13px; transition: 0.2s; border: none; cursor: pointer; }");
+        writer.println(".btn-return { background: #0f172a; color: white; }");
+        writer.println(".btn-return:hover { background: #334155; }");
+        writer.println(".nav-bar { display: flex; gap: 15px; margin-top: 40px; padding: 20px; background: white; border-radius: 16px; border: 1px solid #e2e8f0; justify-content: center; }");
+        writer.println(".btn-outline { border: 1px solid #e2e8f0; color: #64748b; background: transparent; }");
+        writer.println(".btn-outline:hover { background: #f8fafc; color: #1e293b; }");
         writer.println("</style></head><body>");
 
         writer.println("<div class='container'>");
-        writer.println("<div class='header-bar'><h2>" + ("ADMIN".equals(role) ? "System Administration: Borrow Logs" : "My Borrowed Library") + "</h2></div>");
-        writer.println("<div class='card'>");
-
-        // Handle Messages from Return Process
-        String status = req.getParameter("status");
-        String error = req.getParameter("error");
-        if ("success".equals(status)) {
-            writer.println("<div class='alert alert-success'>✅ Book returned and available inventory updated.</div>");
-        } else if (error != null) {
-            writer.println("<div class='alert alert-error'>❌ Transaction failed: " + error + "</div>");
-        }
+        writer.println("<div class='admin-header'><h1>" + ("ADMIN".equals(role) ? "System Master Log" : "My Active Loans") + "</h1></div>");
 
         if (borrowedList == null || borrowedList.isEmpty()) {
-            writer.println("<p style='text-align:center; color:#94a3b8; padding:60px 0;'>📭 No active borrowed books found.</p>");
+            writer.println("<div class='user-section' style='padding:80px; text-align:center;'><p style='color:#64748b; font-size:18px;'>📭 No borrowed books found.</p></div>");
         } else {
-            writer.println("<ul>");
+            Map<String, List<String>> groupedRecords = new LinkedHashMap<>();
             for (String record : borrowedList) {
+                String userKey = "Member";
                 String[] parts = record.split("\\|");
-                String id = "N/A", title = "Unknown", meta = "";
-
-                for (String part : parts) {
-                    if (part.contains("ID:")) {
-                        id = part.replace("ID:", "").trim();
-                    } else if (part.contains("Book:") || part.contains("Title:")) {
-                        title = part.replace("Book:", "").replace("Title:", "").trim();
-                    } else if (part.contains("User:") || part.contains("left") || part.contains("OVERDUE") || part.contains("Title:")) {
-                        meta += part.trim() + " ";
-                    }
-                }
-
-                writer.println("<li>");
-                writer.println("<div class='record-content'>");
-                writer.println("  <span class='id-badge'>#" + id + "</span>");
-                writer.println("  <div style='display:flex; flex-direction:column;'>");
-                writer.println("    <span class='book-title'>" + title + "</span>");
-                writer.println("    <span class='book-meta'>" + meta + "</span>");
-                writer.println("  </div>");
-                writer.println("</div>");
-
-                if ("ADMIN".equals(role)) {
-                    writer.println("<form action='" + contextPath + "/return' method='POST' style='margin:0;'>");
-                    writer.println("<input type='hidden' name='borrowId' value='" + id + "'>");
-                    writer.println("<button type='submit' class='btn btn-return' onclick=\"return confirm('Confirm book return for record #" + id + "? Inventory will be restocked.')\">Process Return</button>");
-                    writer.println("</form>");
-                }
-                writer.println("</li>");
+                for (String p : parts) if (p.contains("User:")) userKey = p.replace("User:", "").trim();
+                groupedRecords.computeIfAbsent(userKey, k -> new ArrayList<>()).add(record);
             }
-            writer.println("</ul>");
+
+            for (Map.Entry<String, List<String>> entry : groupedRecords.entrySet()) {
+                String currentUser = entry.getKey();
+                writer.println("<div class='user-section'>");
+                writer.println("  <div class='user-header'>");
+                writer.println("    <div class='user-avatar'>" + currentUser.substring(0, 1) + "</div>");
+                writer.println("    <span class='user-name'>" + currentUser + "'s Borrowed Books</span>");
+                writer.println("  </div>");
+
+                writer.println("  <table><thead><tr><th>Record ID</th><th>Book Title</th><th>Status & Timeline</th>");
+                if ("ADMIN".equals(role)) writer.println("<th>Management</th>");
+                writer.println("  </tr></thead><tbody>");
+
+                for (String record : entry.getValue()) {
+                    String[] parts = record.split("\\|");
+                    String id = "0", title = "N/A", timeline = "";
+                    boolean isOverdue = record.contains("OVERDUE");
+
+                    for (String part : parts) {
+                        if (part.contains("ID:")) id = part.replace("ID:", "").trim();
+                        else if (part.contains("Book:") || part.contains("Title:")) title = part.replace("Book:", "").replace("Title:", "").trim();
+                        else if (part.contains("left") || part.contains("OVERDUE")) timeline = part.trim();
+                    }
+
+                    String pillClass = isOverdue ? "pill-overdue" : "pill-ontime";
+                    String icon = isOverdue ? "⚠️ " : "⏳ ";
+
+                    writer.println("<tr>");
+                    writer.println("  <td><span class='id-badge'>#" + id + "</span></td>");
+                    writer.println("  <td><span class='book-title'>" + title + "</span></td>");
+                    writer.println("  <td><span class='status-pill " + pillClass + "'>" + icon + timeline + "</span></td>");
+
+                    if ("ADMIN".equals(role)) {
+                        writer.println("  <td><form action='" + contextPath + "/return' method='POST' style='margin:0;'>");
+                        writer.println("    <input type='hidden' name='borrowId' value='" + id + "'>");
+                        writer.println("    <button type='submit' class='btn btn-return' onclick=\"return confirm('Confirm return for #" + id + "?')\">Process Return</button>");
+                        writer.println("  </form></td>");
+                    }
+                    writer.println("</tr>");
+                }
+                writer.println("</tbody></table></div>");
+            }
         }
 
-        writer.println("<div class='actions'>");
-        if (!"ADMIN".equals(role)) {
-            writer.println("<a href='books' class='btn btn-borrow'> Borrow another book</a>");
-        }
-        writer.println("<a href='fines' class='btn btn-fines'>Fine Dashboard</a>");
-        writer.println("<a href='books' class='btn btn-back'>Return to Catalog</a>");
-        writer.println("</div></div></div></body></html>");
+        writer.println("<div class='nav-bar'>");
+        writer.println("<a href='books' class='btn btn-return'>Book Catalog</a>");
+        writer.println("<a href='fines' class='btn btn-outline'>Check Fines</a>");
+        writer.println("<a href='books' class='btn btn-outline'>Dashboard</a>");
+        writer.println("</div></div></body></html>");
     }
 }

@@ -7,11 +7,11 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.*;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.List;
+import java.util.*;
 
 /**
  * FINES & DASHBOARD SERVLET
- * Manages the financial overview for both Admins (System Risk) and Members (Personal Debt).
+ * Enhanced with User-Grouped Admin oversight and individual balance calculations.
  */
 @WebServlet("/fines")
 @LoginRequired
@@ -37,7 +37,6 @@ public class FineHistoryServlet extends HttpServlet {
         resp.setContentType("text/html;charset=UTF-8");
         PrintWriter writer = resp.getWriter();
 
-        // --- DATA AGGREGATION ---
         List<String> activeLoans;
         List<String> history;
         double displayTotal;
@@ -51,8 +50,6 @@ public class FineHistoryServlet extends HttpServlet {
         } else {
             activeLoans = libraryService.getMemberActiveLoans(username);
             history = libraryService.getMemberFineHistory(username);
-
-            // Total = Unpaid (recorded in DB) + Projected (accruing daily for late books)
             double recorded = libraryService.getUnpaidFines(username);
             double projected = libraryService.getProjectedLateFees(username);
             displayTotal = recorded + projected;
@@ -62,125 +59,128 @@ public class FineHistoryServlet extends HttpServlet {
         writer.println("<!DOCTYPE html><html><head><title>" + dashboardTitle + "</title>");
         writer.println("<style>");
         writer.println("@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');");
-        writer.println("body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; margin: 0; padding: 40px 20px; color: #1e293b; }");
-        writer.println(".container { max-width: 900px; margin: auto; background: white; border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); overflow: hidden; border: 1px solid #e2e8f0; }");
-        writer.println(".card-header { background: " + ("ADMIN".equals(role) ? "#0f172a" : "#2563eb") + "; color: white; padding: 50px 30px; text-align: center; }");
+        writer.println("body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f1f5f9; margin: 0; padding: 40px 20px; color: #1e293b; }");
+        writer.println(".container { max-width: 1100px; margin: auto; }");
+
+        // Header
+        writer.println(".card-header { background: " + ("ADMIN".equals(role) ? "#0f172a" : "#2563eb") + "; color: white; padding: 40px; border-radius: 24px; text-align: center; margin-bottom: 30px; }");
         writer.println(".card-header h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -1px; }");
-        writer.println(".content { padding: 40px; }");
-        writer.println("h2 { font-size: 14px; color: #94a3b8; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 2px; font-weight: 800; display: flex; align-items: center; gap: 10px; }");
-        writer.println("h2::after { content: ''; flex-grow: 1; height: 1px; background: #f1f5f9; }");
-        writer.println(".total-owed { background: " + ("ADMIN".equals(role) ? "#334155" : "#fff1f2") + "; color: " + ("ADMIN".equals(role) ? "#fff" : "#e11d48") + "; padding: 25px; border-radius: 16px; text-align: center; margin-bottom: 40px; font-weight: 800; font-size: 22px; border: 1px solid " + ("ADMIN".equals(role) ? "transparent" : "#ffe4e6") + "; }");
-        writer.println(".item { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: #ffffff; border: 1px solid #f1f5f9; border-radius: 12px; margin-bottom: 12px; transition: 0.2s; }");
-        writer.println(".item:hover { border-color: #cbd5e1; transform: translateX(5px); }");
-        writer.println(".book-title { font-weight: 700; color: #0f172a; font-size: 16px; }");
-        writer.println(".badge { padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; }");
-        writer.println(".badge-urgent { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }");
-        writer.println(".badge-safe { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }");
-        writer.println(".fine-row { display: flex; justify-content: space-between; align-items: center; padding: 18px; background: #f8fafc; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; }");
-        writer.println(".id-badge { background: #1e293b; color: #fbbf24; padding: 3px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; }");
-        writer.println(".user-name { color: #64748b; font-weight: 700; font-size: 12px; text-transform: uppercase; margin: 0 10px; }");
-        writer.println(".fine-amt { font-weight: 800; font-size: 15px; }");
-        writer.println(".actions { display: flex; gap: 12px; margin-top: 40px; justify-content: center; }");
-        writer.println(".btn { text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 700; font-size: 14px; transition: 0.2s; cursor: pointer; border: none; }");
-        writer.println(".btn-blue { background: #2563eb; color: white; }");
-        writer.println(".btn-slate { background: #f1f5f9; color: #475569; }");
-        writer.println(".btn-delete { background: #fee2e2; color: #dc2626; padding: 8px 16px; font-size: 12px; border: 1px solid #fecaca; }");
-        writer.println(".btn-delete:hover { background: #dc2626; color: white; }");
+
+        // Section Cards
+        writer.println(".user-section { background: white; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 30px; overflow: hidden; border: 1px solid #e2e8f0; }");
+        writer.println(".user-header { background: #f8fafc; padding: 20px 30px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }");
+        writer.println(".user-info { display: flex; align-items: center; gap: 12px; }");
+        writer.println(".user-avatar { background: #6366f1; color: white; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; }");
+        writer.println(".user-balance { background: #fee2e2; color: #dc2626; padding: 6px 16px; border-radius: 12px; font-weight: 800; font-size: 14px; }");
+
+        // Table/Items
+        writer.println("table { width: 100%; border-collapse: collapse; }");
+        writer.println("th { text-align: left; padding: 16px 30px; background: #ffffff; color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #f1f5f9; }");
+        writer.println("td { padding: 15px 30px; border-bottom: 1px solid #f8fafc; font-size: 14px; }");
+
+        writer.println(".status-pill { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }");
+        writer.println(".pill-red { background: #fee2e2; color: #dc2626; }");
+        writer.println(".pill-green { background: #dcfce7; color: #166534; }");
+        writer.println(".btn-del { color: #dc2626; text-decoration: none; font-weight: 700; font-size: 12px; border: 1px solid #fecaca; padding: 5px 10px; border-radius: 8px; background: #fff; cursor:pointer; }");
+        writer.println(".btn-del:hover { background: #dc2626; color: white; }");
+        writer.println(".nav-bar { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }");
         writer.println("</style></head><body>");
 
         writer.println("<div class='container'>");
-        writer.println("<div class='card-header'>");
-        writer.println("<h1>" + dashboardTitle + "</h1>");
-        writer.println("<p style='opacity: 0.9; margin-top: 10px; font-weight: 600;'>" + ("ADMIN".equals(role) ? "Financial Risk Oversight" : "Welcome, " + username) + "</p>");
-        writer.println("</div>");
+        writer.println("<div class='card-header'><h1>" + dashboardTitle + "</h1>");
+        writer.println("<p style='opacity:0.8; font-weight:600;'>System Total Risk: KSH " + String.format("%.2f", displayTotal) + "</p></div>");
 
-        writer.println("<div class='content'>");
+        // --- GROUPING LOGIC ---
+        // We group both history and loans by user for the Admin
+        Map<String, List<String>> userHistory = new LinkedHashMap<>();
+        Map<String, List<String>> userLoans = new HashMap<>();
 
-        // 1. BALANCE SECTION
-        if (displayTotal > 0) {
-            writer.println("<div class='total-owed'>");
-            writer.println(role.equals("ADMIN") ? "🚨 FINES OUTSTANDING: " : "💰 CURRENT BALANCE: ");
-            writer.println("KSH " + String.format("%.2f", displayTotal));
-            writer.println("</div>");
-        }
-
-        // 2. ACTIVE LOANS SECTION
-        writer.println("<h2>" + ("ADMIN".equals(role) ? "Current System Loans" : "Books in your possession") + "</h2>");
-        if (activeLoans.isEmpty()) {
-            writer.println("<p style='text-align:center; color:#94a3b8; padding: 20px;'>No active books detected.</p>");
-        } else {
-            for (String record : activeLoans) {
-                String[] parts = record.split("\\|");
-                // Admin format: ID | User | Title | Days
-                // Member format: ID | Title | Days
-                String title = parts.length > 2 && "ADMIN".equals(role) ? parts[2].trim() : (parts.length > 1 ? parts[1].trim() : parts[0]);
-                String statusText = parts[parts.length - 1].trim();
-                boolean isLate = libraryService.isLoanUrgent(statusText);
-
-                writer.println("<div class='item'>");
-                writer.println("<div><span class='book-title'>" + title + "</span>");
-                if ("ADMIN".equals(role)) {
-                    String idStr = parts[0].trim().replace("ID:", "").trim();
-                    String userStr = parts[1].trim().replace("User:", "").trim();
-                    writer.println("<div style='margin-top:5px;'><span class='id-badge'>#" + idStr + "</span><span class='user-name'>" + userStr + "</span></div>");
-                }
-                writer.println("</div><span class='badge " + (isLate ? "badge-urgent" : "badge-safe") + "'>" + statusText + "</span></div>");
+        if ("ADMIN".equals(role)) {
+            for (String h : history) {
+                String[] p = h.split("\\|");
+                String u = (p.length > 1) ? p[1].replace("User:", "").trim() : "System";
+                userHistory.computeIfAbsent(u, k -> new ArrayList<>()).add(h);
             }
+            for (String l : activeLoans) {
+                String[] p = l.split("\\|");
+                String u = (p.length > 1) ? p[1].replace("User:", "").trim() : "System";
+                userLoans.computeIfAbsent(u, k -> new ArrayList<>()).add(l);
+            }
+        } else {
+            userHistory.put(username, history);
+            userLoans.put(username, activeLoans);
         }
 
-        // 3. FINE HISTORY / GLOBAL LOGS
-        writer.println("<h2 style='margin-top:50px;'>" + ("ADMIN".equals(role) ? "System Payment Audit" : "Your Payment History") + "</h2>");
-        if (history.isEmpty()) {
-            writer.println("<p style='text-align:center; color:#94a3b8; padding: 20px;'>No payment records found.</p>");
-        } else {
-            for (String fine : history) {
-                String[] fParts = fine.split("\\|");
-                String idPart = fParts[0].replaceAll("[^0-9]", "").trim();
-                boolean isUnpaid = fine.toUpperCase().contains("UNPAID");
-                String statusLabel = isUnpaid ? "UNPAID: " : "PAID: ";
-                String statusColor = isUnpaid ? "#e11d48" : "#10b981";
+        // Iterate through each unique user
+        Set<String> allUsers = new TreeSet<>(userHistory.keySet());
+        allUsers.addAll(userLoans.keySet());
 
-                writer.println("<div class='fine-row'>");
+        for (String targetUser : allUsers) {
+            // Calculate specific balance for this user card
+            double recorded = libraryService.getUnpaidFines(targetUser);
+            double projected = libraryService.getProjectedLateFees(targetUser);
+            double userTotal = recorded + projected;
 
-                if (fParts.length >= 3) {
-                    String user = fParts[1].replace("User:", "").trim();
-                    String amt = fParts[2].trim();
+            writer.println("<div class='user-section'>");
+            writer.println("  <div class='user-header'>");
+            writer.println("    <div class='user-info'>");
+            writer.println("      <div class='user-avatar'>" + targetUser.substring(0,1).toUpperCase() + "</div>");
+            writer.println("      <span style='font-weight:800; font-size:18px;'>" + targetUser + "</span>");
+            writer.println("    </div>");
+            writer.println("    <div class='user-balance'>Outstanding: KSH " + String.format("%.2f", userTotal) + "</div>");
+            writer.println("  </div>");
 
-                    writer.println("<div>");
-                    writer.println("<span class='id-badge'>ID: " + idPart + "</span>");
-                    if ("ADMIN".equals(role)) writer.println("<span class='user-name'>" + user + "</span>");
-                    writer.println("<span class='fine-amt' style='color:"+statusColor+";'>" + statusLabel + amt + "</span>");
-                    writer.println("</div>");
-                } else {
-                    writer.println("<span>" + fine + "</span>");
+            // Overdue/Active Books Table for this User
+            writer.println("  <table><thead><tr><th>Loan Details</th><th>Status</th></tr></thead><tbody>");
+            List<String> loans = userLoans.getOrDefault(targetUser, new ArrayList<>());
+            if (loans.isEmpty()) {
+                writer.println("<tr><td colspan='2' style='color:#94a3b8;'>No active loans.</td></tr>");
+            } else {
+                for (String loan : loans) {
+                    String[] lp = loan.split("\\|");
+                    String t = ("ADMIN".equals(role)) ? lp[2].trim() : lp[1].trim();
+                    String s = lp[lp.length-1].trim();
+                    boolean urgent = libraryService.isLoanUrgent(s);
+                    writer.println("<tr><td><b>" + t + "</b></td>");
+                    writer.println("<td><span class='status-pill " + (urgent ? "pill-red" : "pill-green") + "'>" + s + "</span></td></tr>");
                 }
+            }
+            writer.println("</tbody></table>");
 
-                // Actions: Admin deletes records, Member pays active fines
-                if (!idPart.isEmpty()) {
+            // Payment History for this User
+            writer.println("<div style='padding:15px 30px; background:#f8fafc; font-weight:700; font-size:12px; color:#64748b; border-top:1px solid #f1f5f9;'>PAYMENT AUDIT</div>");
+            writer.println("<table><tbody>");
+            List<String> fines = userHistory.getOrDefault(targetUser, new ArrayList<>());
+            if (fines.isEmpty()) {
+                writer.println("<tr><td style='color:#94a3b8;'>No transaction history.</td></tr>");
+            } else {
+                for (String fine : fines) {
+                    String[] fParts = fine.split("\\|");
+                    String fId = fParts[0].replaceAll("[^0-9]", "").trim();
+                    String amt = (fParts.length > 2) ? fParts[2].trim() : "0.00";
+                    boolean isUnpaid = fine.toUpperCase().contains("UNPAID");
+
+                    writer.println("<tr>");
+                    writer.println("  <td><span style='color:#64748b; font-size:11px;'>ID: "+fId+"</span></td>");
+                    writer.println("  <td><b>" + amt + "</b></td>");
+                    writer.println("  <td><span class='status-pill " + (isUnpaid ? "pill-red" : "pill-green") + "'>" + (isUnpaid ? "UNPAID" : "PAID") + "</span></td>");
+                    writer.println("  <td style='text-align:right;'>");
                     if ("ADMIN".equals(role)) {
-                        writer.println("<form action='" + contextPath + "/delete-fine' method='POST' style='margin:0;'>");
-                        writer.println("<input type='hidden' name='fineId' value='" + idPart + "'>");
-                        writer.println("<button type='submit' class='btn btn-delete' onclick='return confirm(\"Delete this financial record permanently?\")'>Delete Record</button>");
-                        writer.println("</form>");
+                        writer.println("    <form action='delete-fine' method='POST' style='margin:0;'>");
+                        writer.println("      <input type='hidden' name='fineId' value='"+fId+"'>");
+                        writer.println("      <button type='submit' class='btn-del'>Delete</button></form>");
                     } else if (isUnpaid) {
-                        writer.println("<form action='" + contextPath + "/pay-fine' method='POST' style='margin:0;'>");
-                        writer.println("<input type='hidden' name='fineId' value='" + idPart + "'>");
-                        writer.println("<button type='submit' class='btn btn-blue' style='padding:8px 16px; font-size:12px;'>Clear Debt</button>");
-                        writer.println("</form>");
+                        writer.println("    <form action='pay-fine' method='POST' style='margin:0;'>");
+                        writer.println("      <input type='hidden' name='fineId' value='"+fId+"'>");
+                        writer.println("      <button type='submit' style='background:#2563eb; color:white; border:none; padding:5px 12px; border-radius:8px; font-weight:700; cursor:pointer;'>Pay</button></form>");
                     }
+                    writer.println("  </td></tr>");
                 }
-                writer.println("</div>");
             }
+            writer.println("</tbody></table></div>");
         }
 
-        // 4. NAVIGATION
-        writer.println("<div class='actions'>");
-        writer.println("<a href='" + contextPath + "/books' class='btn btn-slate'>Return to Catalog</a>");
-        if (!"ADMIN".equals(role)) {
-            writer.println("<a href='" + contextPath + "/books' class='btn btn-blue'>Borrow Books</a>");
-        }
-        writer.println("</div>");
-
-        writer.println("</div></div></body></html>");
+        writer.println("<div class='nav-bar'><a href='books' style='color:#64748b; text-decoration:none; font-weight:700;'>← Return to Catalog</a></div>");
+        writer.println("</div></body></html>");
     }
 }
