@@ -84,7 +84,7 @@
                 <a href="index.jsp">Go to Login</a>
 
     <% } else if ("not_authorized".equals(status)) { %>
-        <h2 class="error">❌ Access Denied</h2>
+        <h2 class="error"> Access Denied</h2>
         <p>The email <strong><%= email %></strong> could not be verified.</p>
         <div class="info-box" style="border-left: 4px solid #e74c3c;">
             <p style="margin: 0; font-size: 13px;"><strong>Reason:</strong> Please ensure you are using your assigned institutional email that has been officially registered with the school. If you believe this is an error, please contact the Registrar's office.</p>
@@ -92,7 +92,7 @@
         <a href="register.jsp" style="background: #64748b;">Try Different Email</a>
 
     <% } else if ("email_taken".equals(status)) { %>
-        <h2 class="error">❌ Account Exists</h2>
+        <h2 class="error">Account Exists</h2>
         <p>An account is already linked to <strong><%= email %></strong>.</p>
         <p>If you've forgotten your password, please contact the admin.</p>
         <a href="index.jsp" style="background: #2a5298;">Login Now</a>
@@ -100,7 +100,7 @@
         <a href="register.jsp" style="background: transparent; color: #64748b; font-size: 13px; padding: 5px;">Back to Register</a>
 
     <% } else { %>
-        <h2 class="error">❌ System Error</h2>
+        <h2 class="error"> System Error</h2>
         <p>We encountered a problem processing your request. Please ensure all fields are correct.</p>
         <a href="register.jsp" style="background: #64748b;">Back to Register</a>
     <% } %>

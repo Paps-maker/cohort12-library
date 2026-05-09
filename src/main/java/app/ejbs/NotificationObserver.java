@@ -19,7 +19,7 @@ public class NotificationObserver {
 
     /**
      * ✅ Listens for events and sends real emails in the background.
-     * Now handles automated overdue fine updates.
+     * Now handles automated overdue fine updates and friendly reminders.
      */
     @Asynchronous
     public void onLibraryAction(@Observes LibraryEvent event) {
@@ -30,6 +30,7 @@ public class NotificationObserver {
         switch (event.getType()) {
             case "REGISTER": subject = "Welcome to our Library!"; break;
             case "OVERDUE_UPDATE": subject = "⚠️ Overdue Fine Notice"; break;
+            case "REMINDER": subject = "📅 Upcoming Return Reminder"; break; // ✅ New Case
             default: subject = "Library Notification: " + event.getType(); break;
         }
 
@@ -39,7 +40,7 @@ public class NotificationObserver {
         switch (event.getType()) {
             case "REGISTER":
                 body.append("Welcome, Your account is now active, LOGIN with your USERNAME & PASSWORD.\n")
-                        .append("Registration Status: ").append(event.getBookTitle()); // Contains the role info
+                        .append("Registration Status: ").append(event.getBookTitle());
                 break;
 
             case "BORROW":
@@ -49,14 +50,20 @@ public class NotificationObserver {
 
             case "RETURN":
                 body.append("Record of Return: ").append(event.getBookTitle())
-                        .append("\n").append(event.getStatus()); // Shows the final fine status
+                        .append("\n").append(event.getStatus());
                 break;
 
             case "OVERDUE_UPDATE":
-                //  Handles the automated daily fine increase emails
-                body.append("This is a daily reminder that your borrowed book is overdue.\n")
-                        .append("Current Status: ").append(event.getBookTitle()) // Carries the "KSH X (Days: Y)" string
+                body.append("This is a notification regarding your overdue borrowed book.\n")
+                        .append("Current Status: ").append(event.getBookTitle())
                         .append("\n\nPlease return the book at your earliest convenience to stop further charges.");
+                break;
+
+            case "REMINDER":
+                //  Handles the 8:00 AM friendly "Due Tomorrow" reminders
+                body.append("This is a friendly reminder regarding your borrowed book.\n")
+                        .append(event.getBookTitle()) // Carries the "Due Tomorrow" message from FineScheduler
+                        .append("\n\nReturning your book on time helps keep the library accessible for everyone and to avoid been fined");
                 break;
 
             default:
@@ -64,7 +71,7 @@ public class NotificationObserver {
                 break;
         }
 
-        body.append("\n\nBest Regards,\nLibrary Management");
+        body.append("\n\nBest Regards,\nLibrary Management System");
 
         sendActualEmail(recipient, subject, body.toString());
     }

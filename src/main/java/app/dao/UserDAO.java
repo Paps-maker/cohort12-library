@@ -2,10 +2,9 @@ package app.dao;
 
 import app.model.User;
 import app.db.DBConnection;
-import jakarta.annotation.Resource;
+import app.util.DataSourceHelper; // Imported your helper
 import jakarta.enterprise.context.ApplicationScoped;
-import javax.sql.DataSource;
-
+import jakarta.inject.Inject; // Used for dependency injection
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,14 +12,14 @@ import java.util.List;
 @ApplicationScoped
 public class UserDAO {
 
-    @Resource(lookup = "java:jboss/datasources/LibraryDS")
-    private DataSource mysqlDataSource;
+    @Inject
+    private DataSourceHelper dbHelper;
 
     private Connection getMySQLCon() {
         try {
-            return mysqlDataSource.getConnection();
+            return dbHelper.getConnection();
         } catch (SQLException e) {
-            System.err.println(" UserDAO: MySQL Pool Error");
+            System.err.println(" UserDAO: MySQL Pool Error via Helper");
             return null;
         }
     }
@@ -63,7 +62,7 @@ public class UserDAO {
     }
 
     /**
-     * ✅ NEW: Optimized for FineScheduler.
+     * getting email via username
      * Directly retrieves the email string associated with a username.
      */
     public String getEmailByUsername(String username) {

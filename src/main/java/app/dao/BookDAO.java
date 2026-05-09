@@ -2,9 +2,9 @@ package app.dao;
 
 import app.model.Book;
 import app.db.DBConnection;
-import jakarta.annotation.Resource;
+import app.util.DataSourceHelper; // Imported your new helper
 import jakarta.enterprise.context.ApplicationScoped;
-import javax.sql.DataSource;
+import jakarta.inject.Inject; // Used for dependency injection
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,12 +12,12 @@ import java.util.List;
 @ApplicationScoped
 public class BookDAO {
 
-    @Resource(lookup = "java:jboss/datasources/LibraryDS")
-    private DataSource mysqlDataSource;
+    @Inject
+    private DataSourceHelper dbHelper;
 
     public Connection getMySQLCon() {
         try {
-            return mysqlDataSource.getConnection();
+            return dbHelper.getConnection();
         } catch (SQLException e) {
             System.err.println(" BookDAO: MySQL Connection Error");
             return null;

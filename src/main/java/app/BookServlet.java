@@ -186,7 +186,11 @@ public class BookServlet extends HttpServlet {
         out.println("<a href='borrowed'>Borrowed books</a>");
 
         if ("ADMIN".equals(role)) {
-            out.println("<a href='" + contextPath + "/addbook' style='background:#10b981; color:white; border:none;'>+ Add Book</a>");
+            // Your existing Add Book button
+            out.println("<a href='" + contextPath + "/addbook' style='background:#10b981; color:white; border:none; padding:10px 15px; text-decoration:none; border-radius:5px; margin-right:10px;'>+ Add Book</a>");
+
+            // The NEW Analytics Dashboard button
+            out.println("<a href='" + contextPath + "/admin/analytics' style='background:#4f46e5; color:white; border:none; padding:10px 15px; text-decoration:none; border-radius:5px;'> View Analytics</a>");
         }
 
         out.println("<a href='logout' style='background:#ef4444; color:white; border:none;'>Logout</a>");

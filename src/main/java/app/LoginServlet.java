@@ -48,6 +48,8 @@ public class LoginServlet extends HttpServlet {
         out.println("<input type='text' name='username' placeholder='Username' required/>");
         out.println("<input type='password' name='password' placeholder='Password' required/>");
         out.println("<button type='submit'>Sign In</button>");
+        //  back to home button
+        out.println("<button type='button' onclick=\"window.location='index.jsp'\" style='background:#f3f4f6; color:#4b5563; border:none; padding:12px; border-radius:8px; font-weight:600; cursor:pointer; width:100%;'>Back to Home</button>");
         out.println("</form>");
 
         out.println("</div></body></html>");

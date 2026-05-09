@@ -2,8 +2,8 @@ package app;
 
 import app.dao.UserDAO;
 import app.model.User;
-import app.events.LibraryEvent; // ✅ Added Import
-import jakarta.enterprise.event.Event; // ✅ Added Import
+import app.events.LibraryEvent; //  Added Import
+import jakarta.enterprise.event.Event; //  Added Import
 import jakarta.inject.Inject;
 import jakarta.servlet.*;
 import jakarta.servlet.annotation.WebServlet;
@@ -21,7 +21,7 @@ public class RegisterServlet extends HttpServlet {
     private UserDAO userDAO;
 
     @Inject
-    private Event<LibraryEvent> eventPublisher; // ✅ Injected for Email Notifications
+    private Event<LibraryEvent> eventPublisher; // Injected for Email Notifications
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)

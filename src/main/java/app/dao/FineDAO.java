@@ -1,9 +1,9 @@
 package app.dao;
 
 import app.model.Fine;
-import jakarta.annotation.Resource;
+import app.util.DataSourceHelper;
 import jakarta.enterprise.context.ApplicationScoped;
-import javax.sql.DataSource;
+import jakarta.inject.Inject;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,19 +11,19 @@ import java.time.LocalDateTime;
 
 /**
  * DATA ACCESS OBJECT: FINES
- * Updated to use direct bookId linking for permanent title display.
+ * Updated to match the Audit ID | Date & Time | Amount | Status | Action layout.
  */
 @ApplicationScoped
 public class FineDAO {
 
-    @Resource(lookup = "java:jboss/datasources/LibraryDS")
-    private DataSource dataSource;
+    @Inject
+    private DataSourceHelper dbHelper;
 
     private Connection getMySQLCon() {
         try {
-            return dataSource.getConnection();
+            return dbHelper.getConnection();
         } catch (SQLException e) {
-            System.err.println(" FineDAO: Connection failed from WildFly Pool");
+            System.err.println(" FineDAO: Connection failed from WildFly Pool via Helper");
             return null;
         }
     }
@@ -32,9 +32,6 @@ public class FineDAO {
     // SECTION 1: RETRIEVAL
     // =========================================================================
 
-    /**
-     *  Used by FineValidator to check payment eligibility.
-     */
     public Fine getFineById(int fineId) {
         String sql = "SELECT * FROM fine WHERE id = ?";
         try (Connection con = getMySQLCon();
@@ -60,11 +57,11 @@ public class FineDAO {
     }
 
     /**
-     *  MEMBER VIEW: Joins directly to Book table via bookId.
+     * MEMBER VIEW: Updated string format for Servlet parsing.
+     * Order: ID | Timestamp | Amount | Status | BookTitle
      */
     public List<String> getUserFines(String username) {
         List<String> list = new ArrayList<>();
-        // Now using f.bookId to ensure title persists after return
         String sql = "SELECT f.id, f.amount, f.status, f.created_at, bk.title " +
                 "FROM fine f " +
                 "LEFT JOIN book bk ON f.bookId = bk.id " +
@@ -79,13 +76,15 @@ public class FineDAO {
                     int id = rs.getInt("id");
                     String status = rs.getString("status");
                     double amt = rs.getDouble("amount");
-                    String title = rs.getString("title");
+                    String title = (rs.getString("title") != null) ? rs.getString("title") : "Unknown Book";
                     Timestamp ts = rs.getTimestamp("created_at");
 
-                    String row = "ID: " + id + " | ";
-                    row += (title != null) ? "Book: " + title + " | " : "Book: [Deleted Title] | ";
-                    row += (amt == 0) ? "Returned on time" : "Fine: KSH " + String.format("%.2f", amt);
-                    row += " | Status: " + status + " | Date: " + (ts != null ? ts.toLocalDateTime().toLocalDate().toString() : "N/A");
+                    // Format matching Servlet parser: ID|Timestamp|Amount|Status|Title
+                    String row = id + " | " +
+                            (ts != null ? ts.toString() : "N/A") + " | " +
+                            String.format("%.2f", amt) + " | " +
+                            status + " | " +
+                            "Book: " + title;
 
                     list.add(row);
                 }
@@ -97,11 +96,12 @@ public class FineDAO {
     }
 
     /**
-     *  ADMIN VIEW: Permanent title lookup via bookId.
+     * ADMIN VIEW: Updated string format for Servlet parsing.
+     * Order: ID | User | Amount | Status | Timestamp | BookTitle
      */
     public List<String> getAllFines() {
         List<String> list = new ArrayList<>();
-        String sql = "SELECT f.id, f.username, f.amount, f.status, bk.title " +
+        String sql = "SELECT f.id, f.username, f.amount, f.status, f.created_at, bk.title " +
                 "FROM fine f " +
                 "LEFT JOIN book bk ON f.bookId = bk.id " +
                 "ORDER BY f.created_at DESC";
@@ -111,12 +111,21 @@ public class FineDAO {
             if (con == null) return list;
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String title = rs.getString("title");
-                    String bookName = (title != null) ? title : "[Unknown/Deleted]";
+                    int id = rs.getInt("id");
+                    String user = rs.getString("username").toUpperCase();
+                    double amt = rs.getDouble("amount");
+                    String status = rs.getString("status");
+                    Timestamp ts = rs.getTimestamp("created_at");
+                    String title = (rs.getString("title") != null) ? rs.getString("title") : "[Deleted]";
 
-                    list.add("ID: " + rs.getInt("id") + " | User: " + rs.getString("username").toUpperCase() +
-                            " | Book: " + bookName + " | KSH " + String.format("%.2f", rs.getDouble("amount")) +
-                            " | Status: " + rs.getString("status"));
+                    // Admin view often needs Username for grouping in your Servlet logic
+                    String row = id + " | User: " + user + " | " +
+                            String.format("%.2f", amt) + " | " +
+                            status + " | " +
+                            (ts != null ? ts.toString() : "N/A") + " | " +
+                            "Book: " + title;
+
+                    list.add(row);
                 }
             }
         } catch (Exception e) {
@@ -144,9 +153,6 @@ public class FineDAO {
         return 0.0;
     }
 
-    /**
-     *  Used by FineBean to calculate system-wide risk.
-     */
     public double getSystemTotalUnpaid() {
         String sql = "SELECT SUM(amount) FROM fine WHERE status = 'UNPAID'";
         try (Connection con = getMySQLCon();
@@ -163,9 +169,6 @@ public class FineDAO {
     // SECTION 3: WRITE OPERATIONS
     // =========================================================================
 
-    /**
-     *  FIXED: Added bookId parameter to match BorrowingBean call.
-     */
     public boolean insertFine(String username, double amount, int daysOverdue, int borrowId, int bookId) {
         String sql = "INSERT INTO fine (username, amount, daysOverdue, borrowId, bookId, status, created_at) VALUES (?, ?, ?, ?, ?, 'UNPAID', ?)";
         try (Connection con = getMySQLCon();

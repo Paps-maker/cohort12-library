@@ -47,6 +47,10 @@ public class BorrowedBooks extends HttpServlet {
         writer.println(".admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }");
         writer.println(".admin-header h1 { font-size: 32px; font-weight: 800; letter-spacing: -1.5px; margin: 0; color: #1e293b; }");
 
+        // Added search bar styling
+        writer.println(".search-box { width: 100%; padding: 15px 25px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 30px; font-family: inherit; font-size: 16px; outline: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }");
+        writer.println(".search-box:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }");
+
         writer.println(".user-section { background: white; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 30px; overflow: hidden; border: 1px solid #e2e8f0; }");
         writer.println(".user-header { background: #f8fafc; padding: 20px 30px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 12px; }");
         writer.println(".user-avatar { background: #3b82f6; color: white; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; text-transform: uppercase; }");
@@ -60,7 +64,6 @@ public class BorrowedBooks extends HttpServlet {
         writer.println(".id-badge { background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; }");
         writer.println(".book-title { font-weight: 600; color: #1e293b; display: block; }");
 
-        // Updated Status Badges
         writer.println(".status-pill { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }");
         writer.println(".pill-overdue { color: #e11d48; background: #fff1f2; border: 1px solid #ffe4e6; }");
         writer.println(".pill-ontime { color: #059669; background: #ecfdf5; border: 1px solid #d1fae5; }");
@@ -71,10 +74,27 @@ public class BorrowedBooks extends HttpServlet {
         writer.println(".nav-bar { display: flex; gap: 15px; margin-top: 40px; padding: 20px; background: white; border-radius: 16px; border: 1px solid #e2e8f0; justify-content: center; }");
         writer.println(".btn-outline { border: 1px solid #e2e8f0; color: #64748b; background: transparent; }");
         writer.println(".btn-outline:hover { background: #f8fafc; color: #1e293b; }");
-        writer.println("</style></head><body>");
+        writer.println("</style>");
+
+        // Added the Search Logic Script
+        writer.println("<script>");
+        writer.println("function filterContent() {");
+        writer.println("  let filter = document.getElementById('searchEngine').value.toLowerCase();");
+        writer.println("  let sections = document.getElementsByClassName('user-section');");
+        writer.println("  for (let i = 0; i < sections.length; i++) {");
+        writer.println("    let text = sections[i].innerText.toLowerCase();");
+        writer.println("    sections[i].style.display = text.includes(filter) ? '' : 'none';");
+        writer.println("  }");
+        writer.println("}");
+        writer.println("</script>");
+
+        writer.println("</head><body>");
 
         writer.println("<div class='container'>");
-        writer.println("<div class='admin-header'><h1>" + ("ADMIN".equals(role) ? "System Master Log" : "My Active Loans") + "</h1></div>");
+        writer.println("<div class='admin-header'><h1>" + ("ADMIN".equals(role) ? "Books Borrowed" : "My Borrowed Books") + "</h1></div>");
+
+        // Added search bar input
+        writer.println("<input type='text' id='searchEngine' onkeyup='filterContent()' class='search-box' placeholder='Search records by ID, Title, or Member name...'>");
 
         if (borrowedList == null || borrowedList.isEmpty()) {
             writer.println("<div class='user-section' style='padding:80px; text-align:center;'><p style='color:#64748b; font-size:18px;'>📭 No borrowed books found.</p></div>");

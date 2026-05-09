@@ -58,7 +58,7 @@
     <h2>Create Account</h2>
     <p>Join the School Library system today.</p>
 
-    <%-- ✅ ACTION changed to point to your new RegisterServlet --%>
+    <%--  ACTION changed to point to your new RegisterServlet --%>
     <form action="registerProcess" method="post">
         <label style="font-size: 13px; font-weight: 600;">Username</label>
         <input type="text" name="username" placeholder="johndoe" required/>

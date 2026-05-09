@@ -23,6 +23,7 @@ public class AuthFilter implements Filter {
 
         // ✅ 1. Comprehensive White-list
         // Added "/addbook" to match your new Unified Servlet mapping
+        // Added "/submit-contact" to allow the email form to process
         boolean isPublicPage = path.equals("/login") ||
                 path.equals("/") ||
                 path.equals("/index.jsp") ||
@@ -30,6 +31,7 @@ public class AuthFilter implements Filter {
                 path.equals("/registerProcess") ||
                 path.equals("/contact.jsp") ||        // The form page
                 path.equals("/contactdisplay.jsp") || // The form action target
+                path.equals("/submit-contact") ||     // The email servlet path
                 path.equals("/addbook"); // Matches @WebServlet("/addbook")
 
         // Allow static assets so the UI stays styled

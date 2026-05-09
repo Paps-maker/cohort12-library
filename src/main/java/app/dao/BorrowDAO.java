@@ -1,9 +1,9 @@
 package app.dao;
 
 import app.db.DBConnection;
-import jakarta.annotation.Resource;
+import app.util.DataSourceHelper; // Imported your helper
 import jakarta.enterprise.context.ApplicationScoped;
-import javax.sql.DataSource;
+import jakarta.inject.Inject; // Used for dependency injection
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.time.Duration;
@@ -13,14 +13,14 @@ import java.util.List;
 @ApplicationScoped
 public class BorrowDAO {
 
-    @Resource(lookup = "java:jboss/datasources/LibraryDS")
-    private DataSource mysqlDataSource;
+    @Inject
+    private DataSourceHelper dbHelper;
 
     private Connection getMySQLCon() {
         try {
-            return mysqlDataSource.getConnection();
+            return dbHelper.getConnection();
         } catch (SQLException e) {
-            System.err.println(" BorrowDAO: MySQL Pool Error");
+            System.err.println(" BorrowDAO: MySQL Pool Error via Helper");
             return null;
         }
     }
@@ -39,12 +39,30 @@ public class BorrowDAO {
     // =========================================================================
 
     /**
-     * ✅ NEW: Required for the FineScheduler.
-     * Finds all active borrow records where the due date has passed.
+     * ✅ NEW: Required for FineScheduler (Midnight Overdue Check).
      */
     public List<Integer> getAllOverdueBorrowIds() {
         List<Integer> ids = new ArrayList<>();
         String sql = "SELECT id FROM borrowedbook WHERE due_date < NOW()";
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            if (con == null) return ids;
+            while (rs.next()) {
+                ids.add(rs.getInt("id"));
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return ids;
+    }
+
+    /**
+     * ✅ NEW: Required for FineScheduler (8:00 AM Reminder Check).
+     * Finds loans where the due_date is exactly tomorrow.
+     */
+    public List<Integer> getBooksDueIn24Hours() {
+        List<Integer> ids = new ArrayList<>();
+        // Finds records due within the next calendar day
+        String sql = "SELECT id FROM borrowedbook WHERE DATE(due_date) = CURDATE() + INTERVAL 1 DAY";
         try (Connection con = getMySQLCon();
              PreparedStatement ps = con.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -86,6 +104,9 @@ public class BorrowDAO {
         return 0;
     }
 
+    /**
+     * ✅ FIXED: Required by BorrowingBean to link returns to inventory.
+     */
     public int getBookIdByBorrowId(int borrowId) {
         String sql = "SELECT bookId FROM borrowedbook WHERE id = ?";
         try (Connection con = getMySQLCon();
@@ -97,6 +118,22 @@ public class BorrowDAO {
             }
         } catch (Exception e) { e.printStackTrace(); }
         return -1;
+    }
+
+    /**
+     * ✅ NEW: Required for FineScheduler email content.
+     */
+    public String getBookTitleByBorrowId(int borrowId) {
+        String sql = "SELECT bk.title FROM borrowedbook b JOIN book bk ON b.bookId = bk.id WHERE b.id = ?";
+        try (Connection con = getMySQLCon();
+             PreparedStatement ps = con.prepareStatement(sql)) {
+            if (con == null) return "Unknown Book";
+            ps.setInt(1, borrowId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getString("title");
+            }
+        } catch (Exception e) { e.printStackTrace(); }
+        return "Unknown Book";
     }
 
     public String getMemberByBorrowId(int borrowId) {
@@ -137,7 +174,6 @@ public class BorrowDAO {
                     if (now.isAfter(dueDate)) {
                         long hoursLate = Duration.between(dueDate, now).toHours();
                         int days = (int) (hoursLate / 24);
-                        // Ensures at least 1 day is counted if it's past the hour mark
                         return (hoursLate % 24 > 0 || days == 0) ? days + 1 : days;
                     }
                 }

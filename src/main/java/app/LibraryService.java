@@ -3,9 +3,11 @@ package app;
 import app.dao.BookDAO;
 import app.dao.BorrowDAO;
 import app.dao.FineDAO;
+import app.dao.AnalyticsDAO; // ✅ Added for Analytics Integration
 import app.ejbs.CatalogBean;
 import app.ejbs.BorrowingBean;
 import app.ejbs.FineBean;
+import app.ejbs.FineScheduler; // ✅ Added for daily proactive notifications
 import app.model.Book;
 import app.validation.BookValidator;
 import app.validation.BorrowValidator;
@@ -18,6 +20,7 @@ import jakarta.inject.Named;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event; // ✅ Added for Event firing
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +40,9 @@ public class LibraryService {
     private FineDAO fineDao;
 
     @Inject
+    private AnalyticsDAO analyticsDao; // ✅ Added for Admin Analytics Dashboard
+
+    @Inject
     private CatalogBean catalogBean;
 
     @Inject
@@ -44,6 +50,9 @@ public class LibraryService {
 
     @Inject
     private FineBean fineBean;
+
+    @Inject
+    private FineScheduler fineScheduler; // ✅ Handles scheduled notifications (Midnight & 8 AM)
 
     @Inject
     private Event<LibraryEvent> eventPublisher; // ✅ Added Event Publisher
@@ -176,8 +185,19 @@ public class LibraryService {
         }
     }
 
+    /**
+     * ✅ UPDATED: Cleaned up the 2-minute timer logic.
+     * The system now relies on the FineScheduler's daily proactive checks.
+     */
     public String processReturnRequest(String role, String borrowIdParam) {
-        return borrowingBean.processReturn(role, borrowIdParam);
+        // 1. Perform the return logic
+        String result = borrowingBean.processReturn(role, borrowIdParam);
+
+        // 2. Logic for manual notification timer has been moved to FineScheduler's daily @Schedule
+        if (result != null && result.contains("Success")) {
+            System.out.println(">>> LibraryService: Return successful for Borrow ID: " + borrowIdParam);
+        }
+        return result;
     }
 
     public boolean addCopies(int bookId, int amount) {
@@ -204,5 +224,46 @@ public class LibraryService {
             }
             return fine;
         }).collect(Collectors.toList());
+    }
+
+    // =========================================================================
+    // SECTION 4: ADMIN ANALYTICS INTEGRATION
+    // =========================================================================
+
+    public Map<String, Integer> getTopBorrowedBooks() {
+        return analyticsDao.getTopBooks();
+    }
+
+    public double getSystemTotalRevenue() {
+        return analyticsDao.getTotalRevenue();
+    }
+
+    public Map<String, Integer> getMostActiveMembers() {
+        return analyticsDao.getMostActiveUsers();
+    }
+
+    public Map<String, Double> getWeeklyDebtTrend() {
+        return analyticsDao.getDailyDebtTrend();
+    }
+
+    /**
+     * ✅ UPDATED: Now returns the SUM (double) from the DAO.
+     */
+    public double getUnpaidFinesCount() {
+        return analyticsDao.getUnpaidFineCount();
+    }
+
+    /**
+     * ✅ NEW: Fetches the total volume of book copies across the entire library.
+     */
+    public int getLibraryTotalInventory() {
+        return analyticsDao.getTotalBookVolume();
+    }
+
+    /**
+     * ✅ NEW: Fetches the count of books that are currently overdue for return.
+     */
+    public int getSystemOverdueCount() {
+        return analyticsDao.getActiveOverdueCount();
     }
 }
