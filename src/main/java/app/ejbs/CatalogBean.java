@@ -16,15 +16,14 @@ public class CatalogBean {
     @Inject
     private BorrowDAO borrowDao;
 
-    /**
-     * Matches LibraryService.getAllBooks() logic.
-     */
+
+
     public List<Book> getAvailableBooks() {
         return bookDao.getAllBooks();
     }
 
     /**
-     * Matches LibraryService.getAvailableCount() call.
+
      * Sums up available_copies across all titles.
      */
     public int getTotalAvailableCopies() {
@@ -34,7 +33,7 @@ public class CatalogBean {
     }
 
     /**
-     * Matches LibraryService.getBorrowedCountForUser(..., "ADMIN") call.
+    getBorrowedCountForUser(..., "ADMIN") call.
      * Calculates: Total System Capacity - Current Available Stock.
      */
     public int getSystemBorrowedCount() {
@@ -42,20 +41,16 @@ public class CatalogBean {
         int totalPhysicalInventory = books.stream().mapToInt(Book::getTotalQuantity).sum();
         int currentAvailable = books.stream().mapToInt(Book::getAvailableCopies).sum();
 
-        // The difference is what is currently in the hands of users
+
         return Math.max(0, totalPhysicalInventory - currentAvailable);
     }
 
-    /**
-     * Legacy helper if you still use username-specific counts inside this bean.
-     */
+
     public int getMemberBorrowedCount(String username) {
         return borrowDao.getMemberLoanCount(username);
     }
 
-    /**
-     * Helper to determine if a return date is dangerously close.
-     */
+
     public boolean isLoanUrgent(String daysStr) {
         if (daysStr == null || daysStr.trim().isEmpty()) return false;
         String normalized = daysStr.toUpperCase();

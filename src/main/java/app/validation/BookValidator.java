@@ -3,29 +3,17 @@ package app.validation;
 import jakarta.enterprise.context.RequestScoped; //  Required for CDI management
 import jakarta.inject.Named;
 
-/**
- *  BUSINESS RULE ENGINE: Book Validation
- * 1. Labelled with the Qualifier for Strategy-based injection.
- * 2. RequestScoped ensures a fresh instance per form submission.
- */
+
 @RequestScoped
 @ValidatorQualifier(ValidatorQualifier.ValidationChoice.BOOK)
 public class BookValidator implements Validate {
 
-    /**
-     * Implementation of the Validate interface method.
-     * Core logic for Title length.
-     */
+
     @Override
     public boolean name(String name) {
         return name != null && name.trim().length() >= 3;
     }
 
-    /**
-     * Comprehensive validation for the Book creation form.
-     * This ensures data integrity before hits your MySQL/Postgres DAOs.
-     * * @return String error message if invalid, null if validation passes.
-     */
     public String validate(String title, String imageUrl, String description) {
 
         // 1. Title Validation (Logic reused from interface)
@@ -57,6 +45,6 @@ public class BookValidator implements Validate {
             return "Content Error: Description exceeds the 500-character limit (Current: " + description.length() + ").";
         }
 
-        return null; // ✅ All checks passed
+        return null; //  All checks passed
     }
 }

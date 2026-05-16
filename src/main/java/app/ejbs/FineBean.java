@@ -5,11 +5,13 @@ import app.dao.BorrowDAO;
 import app.validation.FineValidator;
 import jakarta.ejb.Stateless;
 import jakarta.inject.Inject;
+
 import java.util.List;
 
 /**
  * SERVICE EJB: FINE MANAGEMENT
  * Handles payment processing and financial risk projections.
+ * Updated to align with GenericDao for the Assessment-1-Livingstone Project.
  */
 @Stateless
 public class FineBean {
@@ -23,12 +25,18 @@ public class FineBean {
     @Inject
     private FineValidator fineValidator;
 
-    /**
-     * Processes a fine payment after validation.
-     */
+    // Central system rule
+    private static final double RATE_PER_DAY = 50.0;
+
+    public double calculateFineForRecord(int borrowId) {
+        int lateDays = borrowDao.getOverdueDays(borrowId);
+        return (lateDays > 0) ? (lateDays * RATE_PER_DAY) : 0.0;
+    }
+
     public boolean payFine(String username, String fineIdParam) {
-        // Validation ensures the fine belongs to the user and is actually unpaid
-        if (fineValidator.validatePayment(username, fineIdParam) != null) return false;
+        if (fineValidator.validatePayment(username, fineIdParam) != null) {
+            return false;
+        }
 
         try {
             int fineId = Integer.parseInt(fineIdParam);
@@ -39,59 +47,54 @@ public class FineBean {
     }
 
     /**
-     * Admin-only operation to remove a fine record.
+     * Deletes a fine record using the standardized GenericDao method.
      */
     public boolean deleteFine(int fineId) {
-        return fineDao.deleteFine(fineId);
+        try {
+            // ✅ Standardized method inherited from GenericDao
+            fineDao.delete(fineId);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
-    /**
-     * ✅ UPDATED: Debt Projection
-     * Calculates current unpaid fines PLUS estimated fees for books currently overdue.
-     */
     public double getProjectedDebt(String username) {
         double currentFines = fineDao.getTotalUnpaid(username);
-
-        // We pass the raw string list from BorrowDAO and parse the IDs
         List<String> activeLoans = borrowDao.getUserBorrowed(username);
+
         return currentFines + calculateOngoingLateFees(activeLoans);
     }
 
-    /**
-     * ✅ FIXED: System-wide Financial Risk
-     * Calls getSystemTotalUnpaid() which is now present in the updated FineDAO.
-     */
     public double getSystemTotalRisk() {
-        // Matches the method name in your updated FineDAO to fix the 'cannot find symbol' error
         double totalUnpaidFines = fineDao.getSystemTotalUnpaid();
-
-        // getAllBorrowed now correctly joins physical copies but still returns IDs
         List<String> allActiveLoans = borrowDao.getAllBorrowed();
+
         return totalUnpaidFines + calculateOngoingLateFees(allActiveLoans);
     }
 
-    /**
-     * Internal helper to calculate potential fines for books not yet returned.
-     * Uses the KSH 50.00 per day standard.
-     */
+    // =========================================================================
+    // INTERNAL CALCULATION ENGINE
+    // =========================================================================
+
     private double calculateOngoingLateFees(List<String> records) {
         double accumulatedFees = 0.0;
+
         for (String record : records) {
             try {
-                // Extracts the "ID: X" part of the formatted string from BorrowDAO
                 String[] parts = record.split("\\|");
-                int borrowId = Integer.parseInt(parts[0].replace("ID:", "").trim());
 
-                // Uses the updated BorrowDAO method that checks due_date vs now
-                int lateDays = borrowDao.getOverdueDays(borrowId);
+                int borrowId = Integer.parseInt(
+                        parts[0].replace("ID:", "").trim()
+                );
 
-                if (lateDays > 0) {
-                    accumulatedFees += (lateDays * 50.0);
-                }
-            } catch (Exception e) {
-                // Skip malformed strings to prevent calculation crashes
+                accumulatedFees += calculateFineForRecord(borrowId);
+
+            } catch (Exception ignored) {
+                // skip malformed records safely
             }
         }
+
         return accumulatedFees;
     }
 }

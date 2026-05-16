@@ -24,18 +24,27 @@ public class Fine {
 
     private int borrowId;
 
+    // ✅ ADD THIS FIELD
+    private int bookId;
+
     public Fine() {}
 
-    public Fine(String username, double amount, int daysOverdue, int borrowId) {
+    public Fine(String username, double amount, int daysOverdue, int borrowId, int bookId) {
         this.username = username;
         this.amount = amount;
         this.daysOverdue = daysOverdue;
         this.borrowId = borrowId;
+        this.bookId = bookId; // ✅ Initialize bookId
         this.status = "UNPAID";
         this.createdAt = LocalDateTime.now();
     }
 
-    // ✅ Complete Getters and Setters
+    // ... (Keep existing getters and setters) ...
+
+    // ✅ ADD THESE GETTERS AND SETTERS
+    public int getBookId() { return bookId; }
+    public void setBookId(int bookId) { this.bookId = bookId; }
+
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 

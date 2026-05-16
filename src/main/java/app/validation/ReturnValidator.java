@@ -1,13 +1,11 @@
 package app.validation;
 
 import app.dao.BorrowDAO;
+import app.model.BorrowedBook;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import jakarta.enterprise.context.RequestScoped;
 
-/**
- * ✅ BUSINESS RULE ENGINE: Return Validation
- */
 @Named("returnValidator")
 @RequestScoped
 public class ReturnValidator {
@@ -17,6 +15,7 @@ public class ReturnValidator {
 
     /**
      * Validates if a book can be returned.
+     * Updated to use GenericDao patterns to resolve compilation errors.
      */
     public String validateReturn(String role, String borrowIdStr) {
 
@@ -31,13 +30,14 @@ public class ReturnValidator {
         }
 
         try {
-            // Clean the ID (removes # or spaces if present)
+            // Clean the input to ensure it is purely numeric
             int borrowId = Integer.parseInt(borrowIdStr.replaceAll("[^0-9]", ""));
 
-            // 3. Existence & State Check (Merged)
-            // In a relational system, if the record is gone from the 'borrowed' table,
-            // it means the book is already back in the 'inventory'.
-            if (!borrowDao.exists(borrowId)) {
+            // 3. Existence & State Check
+            // Replaced borrowDao.exists(borrowId) with findById check
+            BorrowedBook record = borrowDao.findById(borrowId);
+
+            if (record == null) {
                 return "Status Error: Transaction #" + borrowId + " not found or already returned.";
             }
 

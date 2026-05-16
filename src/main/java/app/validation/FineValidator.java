@@ -7,9 +7,8 @@ import jakarta.inject.Named;
 import jakarta.enterprise.context.RequestScoped;
 
 /**
- * ✅ BUSINESS RULE ENGINE: Fine Payment Validation
- * This class ensures that payments are only processed for valid, unpaid fines
- * belonging to the authenticated user.
+ * VALIDATION LAYER: FINES
+ * Refactored to align with GenericDao for the Assessment-1-Livingstone Project.
  */
 @Named("fineValidator")
 @RequestScoped
@@ -18,14 +17,6 @@ public class FineValidator {
     @Inject
     private FineDAO fineDAO;
 
-    /**
-     * ✅ FULL VALIDATION: Checks existence, ownership, and status.
-     * Synchronized with FineDAO.getFineById(int).
-     *
-     * @param username The user attempting the payment.
-     * @param fineIdStr The raw ID string from the web form.
-     * @return String error message if invalid, or null if validation passes.
-     */
     public String validatePayment(String username, String fineIdStr) {
 
         // 1. Basic Format Check
@@ -41,8 +32,8 @@ public class FineValidator {
         }
 
         // 2. Existence Check
-        // Resolves compilation error by calling the validated method in FineDAO
-        Fine existingFine = fineDAO.getFineById(fineId);
+        // ✅ Standardized method from GenericDao (replaces getFineById)
+        Fine existingFine = fineDAO.findById(fineId);
         if (existingFine == null) {
             return "Error: Fine record not found in the system.";
         }
@@ -63,6 +54,6 @@ public class FineValidator {
             return "Error: This fine has no outstanding balance.";
         }
 
-        return null; // All checks passed!
+        return null; // Validation successful
     }
 }

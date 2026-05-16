@@ -1,292 +1,132 @@
 package app.dao;
 
-import app.db.DBConnection;
-import app.util.DataSourceHelper; // Imported your helper
+import app.model.BorrowedBook;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject; // Used for dependency injection
-import java.sql.*;
+import jakarta.transaction.Transactional;
 import java.time.LocalDateTime;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
+/**
+ * DATA ACCESS OBJECT: BORROWING
+ * Cleaned and optimized to inherit CRUD from GenericDao.
+ */
 @ApplicationScoped
-public class BorrowDAO {
-
-    @Inject
-    private DataSourceHelper dbHelper;
-
-    private Connection getMySQLCon() {
-        try {
-            return dbHelper.getConnection();
-        } catch (SQLException e) {
-            System.err.println(" BorrowDAO: MySQL Pool Error via Helper");
-            return null;
-        }
-    }
-
-    private Connection getPostgresCon() {
-        try {
-            return DBConnection.getPostgresConnection();
-        } catch (Exception e) {
-            System.err.println(" BorrowDAO: PostgreSQL Connection Failed (Backup DB)");
-            return null;
-        }
-    }
+@Transactional
+public class BorrowDAO extends GenericDao<BorrowedBook, Integer> {
 
     // =========================================================================
-    // SECTION 1: VALIDATION & HELPERS
+    // SECTION 1: VALIDATION & ANALYTICS
     // =========================================================================
 
-    /**
-     * ✅ NEW: Required for FineScheduler (Midnight Overdue Check).
-     */
     public List<Integer> getAllOverdueBorrowIds() {
-        List<Integer> ids = new ArrayList<>();
-        String sql = "SELECT id FROM borrowedbook WHERE due_date < NOW()";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (con == null) return ids;
-            while (rs.next()) {
-                ids.add(rs.getInt("id"));
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return ids;
+        return getEm().createQuery("SELECT b.id FROM BorrowedBook b WHERE b.dueDate < :now", Integer.class)
+                .setParameter("now", LocalDateTime.now())
+                .getResultList();
     }
 
-    /**
-     * ✅ NEW: Required for FineScheduler (8:00 AM Reminder Check).
-     * Finds loans where the due_date is exactly tomorrow.
-     */
     public List<Integer> getBooksDueIn24Hours() {
-        List<Integer> ids = new ArrayList<>();
-        // Finds records due within the next calendar day
-        String sql = "SELECT id FROM borrowedbook WHERE DATE(due_date) = CURDATE() + INTERVAL 1 DAY";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (con == null) return ids;
-            while (rs.next()) {
-                ids.add(rs.getInt("id"));
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return ids;
-    }
+        LocalDateTime tomorrowStart = LocalDateTime.now().plusDays(1).withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime tomorrowEnd = tomorrowStart.plusDays(1).minusSeconds(1);
 
-    public boolean exists(int borrowId) {
-        String sql = "SELECT COUNT(*) FROM borrowedbook WHERE id = ?";
-        try (Connection con = getMySQLCon(); PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return false;
-            ps.setInt(1, borrowId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() && rs.getInt(1) > 0;
-            }
-        } catch (Exception e) { return false; }
-    }
-
-    public int getDaysLeft(String bookTitle) {
-        String sql = "SELECT b.due_date FROM borrowedbook b " +
-                "JOIN book bk ON b.bookId = bk.id WHERE bk.title = ? ORDER BY b.due_date ASC LIMIT 1";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return 0;
-            ps.setString(1, bookTitle);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    Timestamp dDate = rs.getTimestamp("due_date");
-                    if (dDate == null) return 0;
-                    long daysRemaining = Duration.between(LocalDateTime.now(), dDate.toLocalDateTime()).toDays();
-                    return (daysRemaining < 0) ? 0 : (int) daysRemaining;
-                }
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return 0;
-    }
-
-    /**
-     * ✅ FIXED: Required by BorrowingBean to link returns to inventory.
-     */
-    public int getBookIdByBorrowId(int borrowId) {
-        String sql = "SELECT bookId FROM borrowedbook WHERE id = ?";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return -1;
-            ps.setInt(1, borrowId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getInt("bookId");
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return -1;
-    }
-
-    /**
-     * ✅ NEW: Required for FineScheduler email content.
-     */
-    public String getBookTitleByBorrowId(int borrowId) {
-        String sql = "SELECT bk.title FROM borrowedbook b JOIN book bk ON b.bookId = bk.id WHERE b.id = ?";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return "Unknown Book";
-            ps.setInt(1, borrowId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getString("title");
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return "Unknown Book";
-    }
-
-    public String getMemberByBorrowId(int borrowId) {
-        String sql = "SELECT username FROM borrowedbook WHERE id = ?";
-        try (Connection con = getMySQLCon(); PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return null;
-            ps.setInt(1, borrowId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getString("username");
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return null;
+        return getEm().createQuery("SELECT b.id FROM BorrowedBook b WHERE b.dueDate BETWEEN :start AND :end", Integer.class)
+                .setParameter("start", tomorrowStart)
+                .setParameter("end", tomorrowEnd)
+                .getResultList();
     }
 
     public int getMemberLoanCount(String username) {
-        String sql = "SELECT COUNT(*) FROM borrowedbook WHERE username = ?";
-        try (Connection con = getMySQLCon(); PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return 0;
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return rs.getInt(1);
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return 0;
+        Long count = getEm().createQuery("SELECT COUNT(b) FROM BorrowedBook b WHERE b.username = :user", Long.class)
+                .setParameter("user", username)
+                .getSingleResult();
+        return count.intValue();
     }
 
     public int getOverdueDays(int borrowId) {
-        String sql = "SELECT due_date FROM borrowedbook WHERE id = ?";
-        try (Connection con = getMySQLCon(); PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return 0;
-            ps.setInt(1, borrowId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    Timestamp dDate = rs.getTimestamp("due_date");
-                    if (dDate == null) return 0;
-                    LocalDateTime dueDate = dDate.toLocalDateTime();
-                    LocalDateTime now = LocalDateTime.now();
-                    if (now.isAfter(dueDate)) {
-                        long hoursLate = Duration.between(dueDate, now).toHours();
-                        int days = (int) (hoursLate / 24);
-                        return (hoursLate % 24 > 0 || days == 0) ? days + 1 : days;
-                    }
-                }
-            }
-        } catch (Exception e) { e.printStackTrace(); }
+        BorrowedBook record = findById(borrowId); // Inherited from GenericDao
+        if (record == null || record.getDueDate() == null) return 0;
+
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isAfter(record.getDueDate())) {
+            long hoursLate = Duration.between(record.getDueDate(), now).toHours();
+            int days = (int) (hoursLate / 24);
+            return (hoursLate % 24 > 0 || days == 0) ? days + 1 : days;
+        }
         return 0;
     }
 
     // =========================================================================
-    // SECTION 2: CORE LOGIC
+    // SECTION 2: SPECIALIZED LOOKUPS (Joins with Book Entity)
     // =========================================================================
 
-    public int borrowBook(String username, int bookId, int daysRequested) {
-        String sql = "INSERT INTO borrowedbook(username, bookId, borrow_date, due_date) VALUES(?,?,?,?)";
-        LocalDateTime now = LocalDateTime.now();
-        Timestamp borrowDate = Timestamp.valueOf(now);
-        Timestamp dueDate = Timestamp.valueOf(now.plusDays(daysRequested));
-
-        int newId = executeWriteAndGetId(getMySQLCon(), sql, username, bookId, borrowDate, dueDate);
-
-        if (newId != -1) {
-            try (Connection pgCon = getPostgresCon()) {
-                if (pgCon != null) executeWriteAndGetId(pgCon, sql, username, bookId, borrowDate, dueDate);
-            } catch (Exception e) { }
+    public String getBookTitleByBorrowId(int borrowId) {
+        try {
+            return getEm().createQuery(
+                            "SELECT bk.title FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id AND b.id = :id", String.class)
+                    .setParameter("id", borrowId)
+                    .getSingleResult();
+        } catch (Exception e) {
+            return "Unknown Book";
         }
-
-        return newId;
     }
 
-    public boolean returnBook(int borrowId) {
-        String sql = "DELETE FROM borrowedbook WHERE id = ?";
-        boolean m = false;
-        try (Connection con = getMySQLCon(); PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con != null) {
-                ps.setInt(1, borrowId);
-                m = ps.executeUpdate() > 0;
-            }
-        } catch (Exception e) { e.printStackTrace(); }
+    public int getDaysLeft(String bookTitle) {
+        try {
+            LocalDateTime dDate = getEm().createQuery(
+                            "SELECT b.dueDate FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id AND bk.title = :title ORDER BY b.dueDate ASC", LocalDateTime.class)
+                    .setParameter("title", bookTitle)
+                    .setMaxResults(1)
+                    .getSingleResult();
 
-        try (Connection con = getPostgresCon(); PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con != null) {
-                ps.setInt(1, borrowId);
-                ps.executeUpdate();
-            }
-        } catch (Exception e) { }
-        return m;
+            long daysRemaining = Duration.between(LocalDateTime.now(), dDate).toDays();
+            return (daysRemaining < 0) ? 0 : (int) daysRemaining;
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     // =========================================================================
-    // SECTION 3: LISTING & UTILITIES
+    // SECTION 3: LISTING & STATUS FORMATTING
     // =========================================================================
 
     public List<String> getAllBorrowed() {
-        List<String> list = new ArrayList<>();
-        String sql = "SELECT b.id, b.username, bk.title, b.due_date FROM borrowedbook b " +
-                "JOIN book bk ON b.bookId = bk.id ORDER BY b.due_date ASC";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (con == null) return list;
-            while (rs.next()) {
-                list.add("ID: " + rs.getInt("id") + " | User: " + rs.getString("username") +
-                        " | Title: " + rs.getString("title") + " | " + formatStatus(rs.getTimestamp("due_date")));
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return list;
+        List<Object[]> results = getEm().createQuery(
+                        "SELECT b.id, b.username, bk.title, b.dueDate FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id ORDER BY b.dueDate ASC", Object[].class)
+                .getResultList();
+
+        return results.stream()
+                .map(res -> "ID: " + res[0] + " | User: " + res[1] +
+                        " | Title: " + res[2] + " | " + formatStatus((LocalDateTime) res[3]))
+                .collect(Collectors.toList());
     }
 
     public List<String> getUserBorrowed(String username) {
-        List<String> list = new ArrayList<>();
-        String sql = "SELECT b.id, bk.title, b.due_date FROM borrowedbook b " +
-                "JOIN book bk ON b.bookId = bk.id WHERE b.username=? ORDER BY b.due_date ASC";
-        try (Connection con = getMySQLCon(); PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return list;
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    list.add("ID: " + rs.getInt("id") + " | Book: " + rs.getString("title") + " | " + formatStatus(rs.getTimestamp("due_date")));
-                }
-            }
-        } catch (Exception e) { e.printStackTrace(); }
-        return list;
+        List<Object[]> results = getEm().createQuery(
+                        "SELECT b.id, bk.title, b.dueDate FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id AND b.username = :user ORDER BY b.dueDate ASC", Object[].class)
+                .setParameter("user", username)
+                .getResultList();
+
+        return results.stream()
+                .map(res -> "ID: " + res[0] + " | Book: " + res[1] + " | " + formatStatus((LocalDateTime) res[2]))
+                .collect(Collectors.toList());
     }
 
-    private int executeWriteAndGetId(Connection con, String sql, String user, int bId, Timestamp bDate, Timestamp dDate) {
-        if (con == null) return -1;
-        try (PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setString(1, user);
-            ps.setInt(2, bId);
-            ps.setTimestamp(3, bDate);
-            ps.setTimestamp(4, dDate);
-
-            int affected = ps.executeUpdate();
-            if (affected > 0) {
-                try (ResultSet rs = ps.getGeneratedKeys()) {
-                    if (rs.next()) return rs.getInt(1);
-                }
-            }
-        } catch (SQLException e) { e.printStackTrace(); }
-        return -1;
-    }
-
-    private String formatStatus(Timestamp dDate) {
-        if (dDate == null) return "No Due Date";
-        LocalDateTime dueDate = dDate.toLocalDateTime();
+    private String formatStatus(LocalDateTime dueDate) {
+        if (dueDate == null) return "No Due Date";
         LocalDateTime now = LocalDateTime.now();
         if (now.isAfter(dueDate)) {
-            long hours = Duration.between(dueDate, now).toHours();
-            int days = (int) (hours / 24);
-            return "OVERDUE (" + ((hours % 24 > 0 || days == 0) ? days + 1 : days) + " days)";
+            int days = getOverdueDaysLogic(dueDate, now);
+            return "OVERDUE (" + days + " days)";
         } else {
             long diff = Duration.between(now, dueDate).toDays();
             return (diff <= 0) ? "Due Today" : diff + " days left";
         }
+    }
+
+    private int getOverdueDaysLogic(LocalDateTime dueDate, LocalDateTime now) {
+        long hoursLate = Duration.between(dueDate, now).toHours();
+        int days = (int) (hoursLate / 24);
+        return (hoursLate % 24 > 0 || days == 0) ? days + 1 : days;
     }
 }

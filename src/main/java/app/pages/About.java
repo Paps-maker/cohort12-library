@@ -14,6 +14,7 @@ public class About {
         return Arrays.asList(
                 "Login using your username and password",
                 "Go to the Books section",
+                "yooooh",
                 "Select a book to borrow",
                 "Submit borrow request",
                 "View borrowed books list"

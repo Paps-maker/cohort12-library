@@ -5,6 +5,9 @@ import app.dao.BorrowDAO;
 import app.dao.FineDAO;
 import app.dao.UserDAO;
 import app.events.LibraryEvent;
+import app.model.Book;
+import app.model.BorrowedBook;
+import app.model.Fine;
 import app.validation.BorrowValidator;
 import app.validation.ReturnValidator;
 import app.validation.ValidatorQualifier;
@@ -12,6 +15,7 @@ import jakarta.ejb.Stateless;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
+import java.time.LocalDateTime;
 
 @Stateless
 public class BorrowingBean {
@@ -40,53 +44,52 @@ public class BorrowingBean {
     private ReturnValidator returnValidator;
 
     /**
-     * Handles the borrowing process, fetching both Record ID and Book Title for the email.
+     * Handles the borrowing process by utilizing GenericDao save methods.
      */
     public String validateAndBorrow(String username, int bookId, int days) {
         int currentLoanCount = borrowDao.getMemberLoanCount(username);
         double unpaidFines = fineDao.getTotalUnpaid(username);
 
-        int availableCount = bookDao.getAvailableCopiesCount(bookId);
+        // FIX: Replaced getAvailableCopiesCount(bookId) with findById
+        Book book = bookDao.findById(bookId);
+        int availableCount = (book != null) ? book.getAvailableCopies() : 0;
         boolean available = (availableCount > 0);
 
         String error = borrowValidator.canBorrow("ACTIVE", currentLoanCount, available, unpaidFines);
         if (error != null) return error;
 
-        // ✅ 1. Get the newly generated Record ID from the DAO
-        int generatedBorrowId = borrowDao.borrowBook(username, bookId, days);
+        try {
+            // FIX: Replaced borrowBook() with object instantiation and save()
+            BorrowedBook record = new BorrowedBook(username, bookId, days);
+            borrowDao.save(record);
+            int generatedBorrowId = record.getId();
 
-        if (generatedBorrowId != -1) {
+            // Update inventory
             bookDao.addCopiesToExistingBook(bookId, -1);
 
-            // ✅ 2. Fetch the Book Title so the email isn't just numbers
-            String bookTitle = bookDao.getBookTitleById(bookId); // Ensure this exists in your BookDAO
-            if (bookTitle == null) bookTitle = "Unknown Title";
+            String bookTitle = (book != null) ? book.getTitle() : "Unknown Title";
 
-            // ✅ 3. Resolve the actual email address
+            // Resolve actual email address via UserDAO
             String recipientEmail = username;
-            try {
-                var user = userDao.findUserByUsername(username);
-                if (user != null && user.getEmail() != null) {
-                    recipientEmail = user.getEmail();
-                }
-            } catch (Exception e) {
-                System.err.println("Email resolution failed for: " + username);
+            var userRecord = userDao.findUserByUsername(username);
+            if (userRecord != null && userRecord.getEmail() != null) {
+                recipientEmail = userRecord.getEmail();
             }
 
-            // ✅ 4. Fire event with detailed description
             String message = String.format("REC #%d | Book: %s (ID: %d)",
                     generatedBorrowId, bookTitle, bookId);
 
             eventPublisher.fire(new LibraryEvent("BORROW", recipientEmail, message, "Active"));
 
             return "Success: Checked out " + bookTitle + "! Return within " + days + " days.";
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Transaction failed during database write.";
         }
-
-        return "Transaction failed during database write.";
     }
 
     /**
-     * Handles the return process with detailed book info in the notification.
+     * Handles the return process, issuing fines if the record is overdue.
      */
     public String processReturn(String role, String borrowIdParam) {
         String error = returnValidator.validateReturn(role, borrowIdParam);
@@ -94,40 +97,51 @@ public class BorrowingBean {
 
         try {
             int borrowId = Integer.parseInt(borrowIdParam);
-            int bookId = borrowDao.getBookIdByBorrowId(borrowId);
-            String memberUsername = borrowDao.getMemberByBorrowId(borrowId);
+
+            // FIX: Replaced getBookIdByBorrowId and getMemberByBorrowId with findById lookups
+            BorrowedBook borrowRecord = borrowDao.findById(borrowId);
+            if (borrowRecord == null) return "Error: Borrow record not found.";
+
+            int bookId = borrowRecord.getBookId();
+            String memberUsername = borrowRecord.getUsername();
             int daysLate = borrowDao.getOverdueDays(borrowId);
 
-            // Fetch book title for the return email
             String bookTitle = bookDao.getBookTitleById(bookId);
-            if (bookTitle == null) bookTitle = "Unknown Title";
-
             String fineStatus = "No Fine";
+
             if (daysLate > 0 && memberUsername != null) {
-                fineDao.insertFine(memberUsername, daysLate * 50.0, daysLate, borrowId, bookId);
-                fineStatus = "Fine Issued: KSH " + (daysLate * 50.0);
+                // FIX: Replaced insertFine() with manual Fine creation and save()
+                Fine fine = new Fine();
+                fine.setUsername(memberUsername);
+                fine.setAmount(daysLate * 50.0);
+                fine.setDaysOverdue(daysLate);
+                fine.setBorrowId(borrowId);
+                fine.setBookId(bookId);
+                fine.setStatus("UNPAID");
+                fine.setCreatedAt(LocalDateTime.now());
+                fineDao.save(fine);
+
+                fineStatus = "Fine Issued: KSH " + fine.getAmount();
             }
 
-            if (borrowDao.returnBook(borrowId)) {
-                if (bookId != -1) {
-                    bookDao.addCopiesToExistingBook(bookId, 1);
-                }
+            // FIX: Replaced returnBook() with delete()
+            borrowDao.delete(borrowId);
 
-                String recipientEmail = memberUsername;
-                try {
-                    var user = userDao.findUserByUsername(memberUsername);
-                    if (user != null) recipientEmail = user.getEmail();
-                } catch (Exception e) {}
-
-                // ✅ Clearer Return message
-                String message = String.format("Return Processed for REC #%d | Book: %s",
-                        borrowId, bookTitle);
-
-                eventPublisher.fire(new LibraryEvent("RETURN", recipientEmail, message, fineStatus));
-
-                return "Success: " + bookTitle + " returned. " + fineStatus;
+            if (bookId != -1) {
+                bookDao.addCopiesToExistingBook(bookId, 1);
             }
-            return "Database Error: Could not remove loan record.";
+
+            String recipientEmail = memberUsername;
+            var user = userDao.findUserByUsername(memberUsername);
+            if (user != null) recipientEmail = user.getEmail();
+
+            String message = String.format("Return Processed for REC #%d | Book: %s",
+                    borrowId, bookTitle);
+
+            eventPublisher.fire(new LibraryEvent("RETURN", recipientEmail, message, fineStatus));
+
+            return "Success: " + bookTitle + " returned. " + fineStatus;
+
         } catch (NumberFormatException e) {
             return "Invalid Borrow ID format.";
         } catch (Exception e) {

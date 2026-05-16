@@ -1,67 +1,53 @@
 package app.dao;
 
-import app.util.DataSourceHelper; // Imported your helper
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject; // Used for dependency injection
-import java.sql.*;
-import java.util.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * DATA ACCESS OBJECT: Analytics
- * Optimized for dynamic cumulative trend visualization.
+ * Optimized for aggregate reporting in the Assessment-1-Livingstone Project.
  */
 @ApplicationScoped
 public class AnalyticsDAO {
 
-    @Inject
-    private DataSourceHelper dbHelper;
-
-    private Connection getConnection() throws SQLException {
-        return dbHelper.getConnection();
-    }
+    @PersistenceContext(unitName = "TrainingAppPU")
+    private EntityManager em;
 
     // =========================================================================
     // SECTION 1: KEY PERFORMANCE INDICATORS (KPIs)
     // =========================================================================
 
     public double getTotalRevenue() {
-        String sql = "SELECT SUM(amount) FROM fine WHERE status = 'PAID'";
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) return rs.getDouble(1);
-        } catch (SQLException e) { e.printStackTrace(); }
-        return 0.0;
+        Double result = em.createQuery(
+                        "SELECT SUM(f.amount) FROM Fine f WHERE f.status = 'PAID'", Double.class)
+                .getSingleResult();
+        return (result != null) ? result : 0.0;
     }
 
     public int getUnpaidFineCount() {
-        String sql = "SELECT COUNT(DISTINCT username) FROM fine WHERE status = 'UNPAID'";
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) return rs.getInt(1);
-        } catch (SQLException e) { e.printStackTrace(); }
-        return 0;
+        Long result = em.createQuery(
+                        "SELECT COUNT(DISTINCT f.username) FROM Fine f WHERE f.status = 'UNPAID'", Long.class)
+                .getSingleResult();
+        return (result != null) ? result.intValue() : 0;
     }
 
     public int getTotalBookVolume() {
-        String sql = "SELECT SUM(total_quantity) FROM book";
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) return rs.getInt(1);
-        } catch (SQLException e) { e.printStackTrace(); }
-        return 0;
+        // Correctly targets the totalQuantity field from your Book entity
+        Long result = em.createQuery("SELECT SUM(b.totalQuantity) FROM Book b", Long.class)
+                .getSingleResult();
+        return (result != null) ? result.intValue() : 0;
     }
 
     public int getActiveOverdueCount() {
-        String sql = "SELECT COUNT(*) FROM borrowedbook WHERE due_date < NOW() AND return_date IS NULL";
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            if (rs.next()) return rs.getInt(1);
-        } catch (SQLException e) { e.printStackTrace(); }
-        return 0;
+        // Uses CURRENT_TIMESTAMP to match your LocalDateTime fields in BorrowedBook
+        Long result = em.createQuery(
+                        "SELECT COUNT(b) FROM BorrowedBook b WHERE b.dueDate < CURRENT_TIMESTAMP", Long.class)
+                .getSingleResult();
+        return (result != null) ? result.intValue() : 0;
     }
 
     // =========================================================================
@@ -70,61 +56,52 @@ public class AnalyticsDAO {
 
     public Map<String, Integer> getTopBooks() {
         Map<String, Integer> data = new LinkedHashMap<>();
-        String sql = "SELECT bk.title, COUNT(b.id) as count " +
-                "FROM borrowedbook b JOIN book bk ON b.bookId = bk.id " +
-                "GROUP BY bk.title ORDER BY count DESC LIMIT 5";
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                data.put(rs.getString("title"), rs.getInt("count"));
-            }
-        } catch (SQLException e) { e.printStackTrace(); }
+        // Performs a cross-join between BorrowedBook and Book to retrieve titles
+        String jpql = "SELECT bk.title, COUNT(b.id) FROM BorrowedBook b, Book bk " +
+                "WHERE b.bookId = bk.id GROUP BY bk.title ORDER BY COUNT(b.id) DESC";
+
+        List<Object[]> results = em.createQuery(jpql, Object[].class)
+                .setMaxResults(5)
+                .getResultList();
+
+        results.forEach(row -> data.put((String) row[0], ((Long) row[1]).intValue()));
         return data;
     }
 
     public Map<String, Integer> getMostActiveUsers() {
         Map<String, Integer> data = new LinkedHashMap<>();
-        String sql = "SELECT username, COUNT(*) as total FROM borrowedbook GROUP BY username ORDER BY total DESC LIMIT 5";
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                data.put(rs.getString("username"), rs.getInt("total"));
-            }
-        } catch (SQLException e) { e.printStackTrace(); }
+        List<Object[]> results = em.createQuery(
+                        "SELECT b.username, COUNT(b.id) FROM BorrowedBook b " +
+                                "GROUP BY b.username ORDER BY COUNT(b.id) DESC", Object[].class)
+                .setMaxResults(5)
+                .getResultList();
+
+        results.forEach(row -> data.put((String) row[0], ((Long) row[1]).intValue()));
         return data;
     }
 
     /**
-     * ✅ UPDATED: Dynamic Cumulative Trend.
-     * Only shows dates with data. Each point is the sum of itself plus all previous days.
+     * Native Query remains the most reliable way to handle MySQL-specific DATE functions.
      */
     public Map<String, Double> getDailyDebtTrend() {
         Map<String, Double> data = new LinkedHashMap<>();
 
-        // We fetch only active days from the last 7 days
         String sql = "SELECT DATE(created_at) as trend_date, SUM(amount) as daily_sum " +
                 "FROM fine " +
                 "WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) " +
                 "GROUP BY DATE(created_at) " +
                 "ORDER BY trend_date ASC";
 
-        try (Connection con = getConnection();
-             PreparedStatement ps = con.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = em.createNativeQuery(sql).getResultList();
 
-            double runningTotal = 0.0;
-            while (rs.next()) {
-                // This creates the rising curve by accumulating the daily totals
-                runningTotal += rs.getDouble("daily_sum");
-                data.put(rs.getString("trend_date"), runningTotal);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        double runningTotal = 0.0;
+        for (Object[] row : results) {
+            // Number handling ensures compatibility across different JDBC driver return types
+            runningTotal += ((Number) row[1]).doubleValue();
+            data.put(row[0].toString(), runningTotal);
         }
 
-        // If table is empty, show today at 0
         if (data.isEmpty()) {
             data.put(java.time.LocalDate.now().toString(), 0.0);
         }

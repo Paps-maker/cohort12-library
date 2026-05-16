@@ -13,6 +13,13 @@ public class Book {
     @Column(nullable = false)
     private String title;
 
+    // Added fields to resolve controller errors
+    @Column(name = "author")
+    private String author;
+
+    @Column(name = "isbn")
+    private String isbn;
+
     @Column(name = "imageUrl")
     private String imageUrl;
 
@@ -29,40 +36,27 @@ public class Book {
     // CONSTRUCTORS
     // ==========================================
 
-    /**
-     * Required by JPA/Hibernate.
-     */
     public Book() {}
 
     /**
-     * ✅ BACKWARD COMPATIBILITY:
-     * Used by legacy servlets that only provide basic details.
+     * Updated Constructor for creating books with basic details.
      */
-    public Book(String title, String imageUrl, String description) {
+    public Book(String title, String author, String isbn, int totalQuantity) {
         this.title = title;
-        this.imageUrl = imageUrl;
-        this.description = description;
-        this.totalQuantity = 1;
-        this.availableCopies = 1;
-    }
-
-    /**
-     * ✅ NEW: For creating books with specific initial stock levels.
-     */
-    public Book(String title, String imageUrl, String description, int totalQuantity) {
-        this.title = title;
-        this.imageUrl = imageUrl;
-        this.description = description;
+        this.author = author;
+        this.isbn = isbn;
         this.totalQuantity = totalQuantity;
         this.availableCopies = totalQuantity;
     }
 
     /**
-     * ✅ FULL: Used by DAO (mapBook) for fetching complete existing records.
+     * FULL: Used by DAO (mapBook) for fetching complete existing records.
      */
-    public Book(int id, String title, String imageUrl, String description, int totalQuantity, int availableCopies) {
+    public Book(int id, String title, String author, String isbn, String imageUrl, String description, int totalQuantity, int availableCopies) {
         this.id = id;
         this.title = title;
+        this.author = author;
+        this.isbn = isbn;
         this.imageUrl = imageUrl;
         this.description = description;
         this.totalQuantity = totalQuantity;
@@ -79,6 +73,13 @@ public class Book {
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
 
+    // Added Getters and Setters for Author and ISBN
+    public String getAuthor() { return author; }
+    public void setAuthor(String author) { this.author = author; }
+
+    public String getIsbn() { return isbn; }
+    public void setIsbn(String isbn) { this.isbn = isbn; }
+
     public String getImageUrl() { return imageUrl; }
     public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
 
@@ -91,11 +92,6 @@ public class Book {
     public int getAvailableCopies() { return availableCopies; }
     public void setAvailableCopies(int availableCopies) { this.availableCopies = availableCopies; }
 
-    /**
-     * ✅ SERVLET HELPER:
-     * Resolves 'Cannot resolve method getQuantity' in BookServlet.
-     * Maps 'quantity' to the internal 'totalQuantity' field.
-     */
     public int getQuantity() {
         return totalQuantity;
     }

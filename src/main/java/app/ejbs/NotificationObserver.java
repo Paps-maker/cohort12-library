@@ -17,10 +17,7 @@ public class NotificationObserver {
     @Resource(lookup = "java:jboss/mail/LibraryMail")
     private Session mailSession;
 
-    /**
-     * ✅ Listens for events and sends real emails in the background.
-     * Now handles automated overdue fine updates and friendly reminders.
-     */
+
     @Asynchronous
     public void onLibraryAction(@Observes LibraryEvent event) {
         String recipient = event.getEmail();
@@ -30,7 +27,7 @@ public class NotificationObserver {
         switch (event.getType()) {
             case "REGISTER": subject = "Welcome to our Library!"; break;
             case "OVERDUE_UPDATE": subject = "⚠️ Overdue Fine Notice"; break;
-            case "REMINDER": subject = "📅 Upcoming Return Reminder"; break; // ✅ New Case
+            case "REMINDER": subject = "📅 Upcoming Return Reminder"; break; //  New Case
             default: subject = "Library Notification: " + event.getType(); break;
         }
 
@@ -71,7 +68,7 @@ public class NotificationObserver {
                 break;
         }
 
-        body.append("\n\nBest Regards,\nLibrary Management System");
+        body.append("\n\nBest Regards,\nLibrary Management");
 
         sendActualEmail(recipient, subject, body.toString());
     }

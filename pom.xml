@@ -21,6 +21,7 @@
       <version>4.13.2</version>
       <scope>test</scope>
     </dependency>
+
     <!-- 1. The Jakarta Mail API (Interfaces) -->
     <dependency>
       <groupId>jakarta.mail</groupId>

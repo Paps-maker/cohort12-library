@@ -61,10 +61,10 @@
     <%--  ACTION changed to point to your new RegisterServlet --%>
     <form action="registerProcess" method="post">
         <label style="font-size: 13px; font-weight: 600;">Username</label>
-        <input type="text" name="username" placeholder="johndoe" required/>
+        <input type="text" name="username" placeholder="official name's" required/>
 
         <label style="font-size: 13px; font-weight: 600;">Email Address</label>
-        <input type="email" name="email" placeholder="john@example.com" required/>
+        <input type="email" name="email" placeholder="your school email" required/>
 
         <label style="font-size: 13px; font-weight: 600;">Password</label>
         <input type="password" name="password" placeholder="••••••••" required/>
