@@ -56,9 +56,9 @@ public class BorrowingBean {
 
     public BorrowingBean() {}
 
-    // =========================================================================
-    // 📖 READS & ACTIVE CHECKS
-    // =========================================================================
+
+    //  ACTIVE CHECKS
+
 
     public List<String> getAdminBorrowedRecords() {
         return borrowDao.getAllBorrowed();
@@ -82,9 +82,9 @@ public class BorrowingBean {
         return userDao.checkUserExists(identifier.trim());
     }
 
-    // =========================================================================
-    // 📚 BORROW OPERATION
-    // =========================================================================
+
+    //  BORROW OPERATION
+
 
     public String attemptBorrow(String username, String bookIdParam, String daysParam) {
         int bookId = parseInt(bookIdParam);
@@ -127,7 +127,7 @@ public class BorrowingBean {
 
             eventPublisher.fire(new LibraryEvent("BORROW", recipientEmail, message, "Active"));
 
-            SystemActivityServer.broadcastActivity("📖 BOOK CHECKOUT: Member [" + username + "] has borrowed '" +
+            SystemActivityServer.broadcastActivity(" BOOK CHECKOUT: Member [" + username + "] has borrowed '" +
                     bookTitle + "' (ID: " + bookId + ") for " + days + " days. Loan Transaction ID: #" + generatedBorrowId);
 
             return "Success: Checked out " + bookTitle + "! Return within " + days + " days.";
@@ -137,9 +137,9 @@ public class BorrowingBean {
         }
     }
 
-    // =========================================================================
-    // 🔄 RETURN OPERATION (Fixed Transaction Failure Vulnerabilities)
-    // =========================================================================
+
+    //  RETURN OPERATION (Fixed Transaction Failure Vulnerabilities)
+
 
     public String processReturnRequest(String role, String borrowIdParam) {
         if (borrowIdParam == null || borrowIdParam.trim().isEmpty()) {
@@ -198,7 +198,7 @@ public class BorrowingBean {
             eventPublisher.fire(new LibraryEvent("RETURN", recipientEmail, message, fineStatus));
 
             // 6. Broadcast structural processing success across open WebSockets
-            SystemActivityServer.broadcastActivity("🔄 BOOK RETURNED: '" + bookTitle + "' has been handed back by Member [" +
+            SystemActivityServer.broadcastActivity(" BOOK RETURNED: '" + bookTitle + "' has been handed back by Member [" +
                     memberUsername + "]. Inventory restored (+1). Fine Status: " + wsFineDetails);
 
             return "Success: " + bookTitle + " returned successfully. " + fineStatus;
@@ -212,10 +212,8 @@ public class BorrowingBean {
         }
     }
 
-    // =========================================================================
-    // 📊 ANALYTICS & DASHBOARD DATA PROVIDERS
-    // =========================================================================
 
+    //  ANALYTICS & DASHBOARD DATA PROVIDERS
     public Map<String, List<BorrowedBook>> getAllUserLoansMap() {
         try {
             List<BorrowedBook> allLoans = em.createQuery("SELECT b FROM BorrowedBook b JOIN FETCH b.user JOIN FETCH b.book", BorrowedBook.class)
@@ -260,10 +258,8 @@ public class BorrowingBean {
         return stats;
     }
 
-    // =========================================================================
-    // ⏱️ ESTIMATION & SCHEDULING LOGIC
-    // =========================================================================
 
+    // ESTIMATION & SCHEDULING LOGIC
     public LocalDateTime getEarliestReturnDateByTitle(String title) {
         if (title == null || title.trim().isEmpty()) {
             return null;

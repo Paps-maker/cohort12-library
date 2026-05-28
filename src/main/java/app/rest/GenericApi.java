@@ -69,7 +69,7 @@ public abstract class GenericApi<T> {
     }
 
     @DELETE
-    @Path("/{id}")
+    @Path("/{id}")     //@context asks the server for the current security state of the person making the request.
     public Response remove(@PathParam("id") int id, @Context SecurityContext sec) {
         if (!isAdmin(sec)) {
             return errorResponse(Response.Status.FORBIDDEN, "Access Denied: Administrative authority required.");

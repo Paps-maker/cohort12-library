@@ -1,6 +1,6 @@
 package app.controller;
 
-import app.dao.UserDAO;
+import app.ejbs.UserBean;
 import app.framework.ActionGetMethod;
 import app.framework.ActionPostMethod;
 import app.framework.Controller;
@@ -16,7 +16,7 @@ import java.nio.charset.StandardCharsets;
 public class AuthController {
 
     @Inject
-    private UserDAO userDAO;
+    private UserBean userBean;
 
     // 1. DISPLAY LOGIN PAGE
     @ActionGetMethod("/login")
@@ -30,9 +30,14 @@ public class AuthController {
     public ModelAndView authenticate(HttpServletRequest request) {
         String username = request.getParameter("username");
         String password = request.getParameter("password");
-        User user = userDAO.findUser(username, password);
 
-        if (user != null) {
+        // Authenticate using the EJB, which handles the Hashing/Verification logic
+        String authResult = userBean.authenticate(username, password);
+
+        // Check if authentication succeeded (starts with "Bearer " based on your UserBean)
+        if (authResult != null && authResult.startsWith("Bearer ")) {
+            User user = userBean.getUserDetails(username);
+
             // Prevent Session Fixation
             HttpSession oldSession = request.getSession(false);
             if (oldSession != null) {

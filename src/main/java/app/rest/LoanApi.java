@@ -19,7 +19,7 @@ public class LoanApi extends GenericApi<String> {
     // OVERRIDE FETCHALL FOR ROLE-BASED SEGREGATION
     @Override
     @GET
-    @Produces(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)  //@context for the current security state of the person making the request. admin or user
     public Response fetchAll(@Context SecurityContext sec) {
         if (sec == null || sec.getUserPrincipal() == null) {
             return errorResponse(Response.Status.UNAUTHORIZED, "Token missing or expired. Please log in first.");

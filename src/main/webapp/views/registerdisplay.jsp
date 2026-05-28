@@ -67,7 +67,7 @@
 
         if ("success".equals(status)) {
     %>
-        <h2 class="success">✅ Registration Successful</h2>
+        <h2 class="success">Registration Successful</h2>
 
                 <p>Account created successfully! Please login with your credentials below:</p>
 
@@ -81,7 +81,7 @@
                     <strong><%= email %></strong>.
                 </p>
 
-                <a href="index.jsp">Go to Login</a>
+                <a href="${pageContext.request.contextPath}/index.jsp">Go to Login</a>
 
     <% } else if ("not_authorized".equals(status)) { %>
         <h2 class="error"> Access Denied</h2>
@@ -89,13 +89,17 @@
         <div class="info-box" style="border-left: 4px solid #e74c3c;">
             <p style="margin: 0; font-size: 13px;"><strong>Reason:</strong> Please ensure you are using your assigned institutional email that has been officially registered with the school. If you believe this is an error, please contact the Registrar's office.</p>
         </div>
-        <a href="register.jsp" style="background: #64748b;">Try Different Email</a>
+       <a href="${pageContext.request.contextPath}/register.jsp" style="background: #64748b; color: white; padding: 10px; text-decoration: none; display: inline-block;">
+           Try Different Email
+       </a>
 
     <% } else if ("email_taken".equals(status)) { %>
         <h2 class="error">Account Exists</h2>
         <p>An account is already linked to <strong><%= email %></strong>.</p>
         <p>If you've forgotten your password, please contact the admin.</p>
-        <a href="index.jsp" style="background: #2a5298;">Login Now</a>
+        <a href="${pageContext.request.contextPath}/index.jsp" style="background: #2a5298; color: white; padding: 10px; text-decoration: none;">
+            Login Now
+        </a>
         <br>
         <a href="register.jsp" style="background: transparent; color: #64748b; font-size: 13px; padding: 5px;">Back to Register</a>
 
