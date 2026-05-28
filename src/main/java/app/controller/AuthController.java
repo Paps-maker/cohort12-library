@@ -9,6 +9,8 @@ import app.model.User;
 import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Controller
 public class AuthController {
@@ -31,7 +33,7 @@ public class AuthController {
         User user = userDAO.findUser(username, password);
 
         if (user != null) {
-            // Prevent Session Fixation by invalidating existing session before creating a new one
+            // Prevent Session Fixation
             HttpSession oldSession = request.getSession(false);
             if (oldSession != null) {
                 oldSession.invalidate();
@@ -44,7 +46,11 @@ public class AuthController {
             return new ModelAndView("redirect:/books");
         }
 
-        return new ModelAndView("redirect:/login?error=true");
+        // Encode the custom error message
+        String errorMessage = "Invalid username or password";
+        String encodedError = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
+
+        return new ModelAndView("redirect:/login?error=" + encodedError);
     }
 
     // 3. LOGOUT
