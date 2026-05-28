@@ -1,81 +1,69 @@
 package app.controller;
 
 import app.framework.ActionPostMethod;
-import app.services.UserService;
+import app.framework.ModelAndView;
+import app.ejbs.UserBean;
 import jakarta.annotation.Resource;
+import jakarta.enterprise.concurrent.ManagedExecutorService; // 🔑 Use this
 import jakarta.inject.Inject;
 import jakarta.mail.*;
 import jakarta.mail.internet.*;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
+import app.framework.Controller;
 
+@Controller
 public class AccountController {
 
     @Inject
-    private UserService userService;
+    private UserBean userBean;
 
-    // Inject the mail session configured in WildFly JNDI
     @Resource(lookup = "java:jboss/mail/LibraryMail")
     private Session mailSession;
 
-    // =========================
+    // Inject the container's managed pool
+    @Resource(lookup = "java:comp/DefaultManagedExecutorService")
+    private ManagedExecutorService executor;
+
     // 1. REGISTRATION LOGIC
-    // =========================
     @ActionPostMethod("/account/register")
-    public void processRegistration(HttpServletRequest req, HttpServletResponse resp) 
-            throws ServletException, IOException {
-        
+    public ModelAndView processRegistration(HttpServletRequest req) {
         String username = req.getParameter("username");
-        String email = (req.getParameter("email") != null)
-                ? req.getParameter("email").toLowerCase().trim()
-                : "";
+        String email = (req.getParameter("email") != null) ? req.getParameter("email").toLowerCase().trim() : "";
         String password = req.getParameter("password");
 
-        // Delegate to service layer
-        String status = userService.registerUser(username, email, password);
+        String status = userBean.registerUser(username, email, password);
 
-        req.setAttribute("status", status);
-        req.setAttribute("username", username);
-        req.setAttribute("email", email);
-
-        // Forward to the modern display JSP
-        req.getRequestDispatcher("/registerdisplay.jsp").forward(req, resp);
+        return new ModelAndView("/views/registerdisplay.jsp")
+                .addObject("status", status)
+                .addObject("username", username)
+                .addObject("email", email);
     }
 
-    // =========================
-    // 2. CONTACT & EMAIL LOGIC
-    // =========================
+    // 2. CONTACT & EMAIL LOGIC (Refactored for Managed Execution)
     @ActionPostMethod("/account/contact")
-    public void handleContact(HttpServletRequest req, HttpServletResponse resp) 
-            throws ServletException, IOException {
-        
+    public ModelAndView handleContact(HttpServletRequest req) {
         String name = req.getParameter("name");
         String senderEmail = req.getParameter("email");
         String subject = req.getParameter("subject");
         String messageBody = req.getParameter("message");
 
-        req.setAttribute("name", name);
-        req.setAttribute("email", senderEmail);
-        req.setAttribute("subject", subject);
-        req.setAttribute("message", messageBody);
-
-        // Execute background email delivery to prevent UI lag on the ProBook
-        new Thread(() -> {
+        // Use the managed pool instead of 'new Thread()'
+        executor.submit(() -> {
             try {
                 sendBackgroundEmails(name, senderEmail, subject, messageBody);
             } catch (MessagingException e) {
+                // Log via standard Logger for better traceability
                 System.err.println("LibraryMail delivery failed: " + e.getMessage());
             }
-        }).start();
+        });
 
-        req.getRequestDispatcher("/contactdisplay.jsp").forward(req, resp);
+        return new ModelAndView("/views/contactdisplay.jsp")
+                .addObject("name", name)
+                .addObject("email", senderEmail)
+                .addObject("subject", subject)
+                .addObject("message", messageBody);
     }
 
-    /**
-     * Internal helper for background email dispatching
-     */
     private void sendBackgroundEmails(String name, String email, String subject, String body)
             throws MessagingException {
 
@@ -92,7 +80,7 @@ public class AccountController {
         Message memberMsg = new MimeMessage(mailSession);
         memberMsg.setRecipients(Message.RecipientType.TO, InternetAddress.parse(email));
         memberMsg.setSubject("Inquiry Received: " + subject);
-        memberMsg.setText("Hello " + name + ",\n\nWe have received your message regarding " + 
+        memberMsg.setText("Hello " + name + ",\n\nWe have received your message regarding " +
                 subject + " and will respond shortly.\n\nBest regards,\nLibrary Management");
         Transport.send(memberMsg);
     }

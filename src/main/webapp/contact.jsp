@@ -36,7 +36,7 @@
     <div class="card">
         <h2>Send a Message</h2>
         <!-- ACTION UPDATED TO SERVLET -->
-        <form method="post" action="submit-contact">
+        <form method="post" action="${pageContext.request.contextPath}/account/contact">
             <input type="text" name="name" placeholder="Your Name" required />
             <input type="email" name="email" placeholder="Your Email" required />
             <input type="text" name="subject" placeholder="Subject" required />

@@ -8,17 +8,14 @@ import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * DATA ACCESS OBJECT: BORROWING
- * Cleaned and optimized to inherit CRUD from GenericDao.
- */
+
 @ApplicationScoped
 @Transactional
 public class BorrowDAO extends GenericDao<BorrowedBook, Integer> {
 
-    // =========================================================================
+
     // SECTION 1: VALIDATION & ANALYTICS
-    // =========================================================================
+
 
     public List<Integer> getAllOverdueBorrowIds() {
         return getEm().createQuery("SELECT b.id FROM BorrowedBook b WHERE b.dueDate < :now", Integer.class)
@@ -36,9 +33,22 @@ public class BorrowDAO extends GenericDao<BorrowedBook, Integer> {
                 .getResultList();
     }
 
+    /**
+     * Dual-purpose counter logic:
+     * - If username is provided, counts loans for that member.
+     * - If username is null/empty, returns the total system-wide active loans (for Admin Dashboard).
+     */
     public int getMemberLoanCount(String username) {
-        Long count = getEm().createQuery("SELECT COUNT(b) FROM BorrowedBook b WHERE b.username = :user", Long.class)
-                .setParameter("user", username)
+        // Handshake check for admin global stat cards
+        if (username == null || username.trim().isEmpty()) {
+            Long globalCount = getEm().createQuery("SELECT COUNT(b) FROM BorrowedBook b", Long.class)
+                    .getSingleResult();
+            return globalCount.intValue();
+        }
+
+        // Standard track path mapping for individual user dashboards
+        Long count = getEm().createQuery("SELECT COUNT(b) FROM BorrowedBook b WHERE b.user.username = :user", Long.class)
+                .setParameter("user", username.trim())
                 .getSingleResult();
         return count.intValue();
     }
@@ -56,14 +66,14 @@ public class BorrowDAO extends GenericDao<BorrowedBook, Integer> {
         return 0;
     }
 
-    // =========================================================================
-    // SECTION 2: SPECIALIZED LOOKUPS (Joins with Book Entity)
-    // =========================================================================
+
+    // SECTION 2: SPECIALIZED LOOKUPS (Leveraging Object Graph Navigation)
+
 
     public String getBookTitleByBorrowId(int borrowId) {
         try {
             return getEm().createQuery(
-                            "SELECT bk.title FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id AND b.id = :id", String.class)
+                            "SELECT b.book.title FROM BorrowedBook b WHERE b.id = :id", String.class)
                     .setParameter("id", borrowId)
                     .getSingleResult();
         } catch (Exception e) {
@@ -74,8 +84,8 @@ public class BorrowDAO extends GenericDao<BorrowedBook, Integer> {
     public int getDaysLeft(String bookTitle) {
         try {
             LocalDateTime dDate = getEm().createQuery(
-                            "SELECT b.dueDate FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id AND bk.title = :title ORDER BY b.dueDate ASC", LocalDateTime.class)
-                    .setParameter("title", bookTitle)
+                            "SELECT b.dueDate FROM BorrowedBook b WHERE LOWER(b.book.title) = LOWER(:title) ORDER BY b.dueDate ASC", LocalDateTime.class)
+                    .setParameter("title", bookTitle.trim())
                     .setMaxResults(1)
                     .getSingleResult();
 
@@ -86,13 +96,12 @@ public class BorrowDAO extends GenericDao<BorrowedBook, Integer> {
         }
     }
 
-    // =========================================================================
     // SECTION 3: LISTING & STATUS FORMATTING
-    // =========================================================================
+
 
     public List<String> getAllBorrowed() {
         List<Object[]> results = getEm().createQuery(
-                        "SELECT b.id, b.username, bk.title, b.dueDate FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id ORDER BY b.dueDate ASC", Object[].class)
+                        "SELECT b.id, b.user.username, b.book.title, b.dueDate FROM BorrowedBook b ORDER BY b.dueDate ASC", Object[].class)
                 .getResultList();
 
         return results.stream()
@@ -103,7 +112,7 @@ public class BorrowDAO extends GenericDao<BorrowedBook, Integer> {
 
     public List<String> getUserBorrowed(String username) {
         List<Object[]> results = getEm().createQuery(
-                        "SELECT b.id, bk.title, b.dueDate FROM BorrowedBook b, Book bk WHERE b.bookId = bk.id AND b.username = :user ORDER BY b.dueDate ASC", Object[].class)
+                        "SELECT b.id, b.book.title, b.dueDate FROM BorrowedBook b WHERE b.user.username = :user ORDER BY b.dueDate ASC", Object[].class)
                 .setParameter("user", username)
                 .getResultList();
 

@@ -5,22 +5,21 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.util.List;
 
-/**
- * DATA ACCESS OBJECT: BOOKS
- * Optimized to inherit standard CRUD from GenericDao while maintaining
- * specialized inventory management logic.
- */
+
 @ApplicationScoped
 @Transactional
 public class BookDAO extends GenericDao<Book, Integer> {
 
-    // =========================================================================
-    // SECTION 1: INVENTORY & STOCK MANAGEMENT (Specialized Logic)
-    // =========================================================================
 
-    /**
-     * Efficient lookup for notification generation.
-     */
+    // SECTION 0: STANDARD CRUD OVERRIDES
+
+    public void update(Book book) {
+        getEm().merge(book);
+    }
+
+
+    // SECTION 1: INVENTORY & STOCK MANAGEMENT
+
     public String getBookTitleById(int bookId) {
         try {
             return getEm().createQuery("SELECT b.title FROM Book b WHERE b.id = :id", String.class)
@@ -31,21 +30,39 @@ public class BookDAO extends GenericDao<Book, Integer> {
         }
     }
 
-    /**
-     * Specialized inventory update logic using JPQL.
-     * Kept because this handles complex conditional updates that standard CRUD doesn't.
-     */
     public boolean updateInventory(int bookId, int change, boolean isAdminUpdate) {
         try {
-            String ql = isAdminUpdate
-                    ? "UPDATE Book b SET b.totalQuantity = b.totalQuantity + :ch, b.availableCopies = b.availableCopies + :ch WHERE b.id = :id"
-                    : "UPDATE Book b SET b.availableCopies = b.availableCopies + :ch WHERE b.id = :id";
+            Book book = findById(bookId);
+            if (book == null) return false;
 
-            int updated = getEm().createQuery(ql)
-                    .setParameter("ch", change)
-                    .setParameter("id", bookId)
-                    .executeUpdate();
-            return updated > 0;
+            if (isAdminUpdate) {
+                book.setQuantity(book.getQuantity() + change);
+            }
+            book.setAvailableCopies(book.getAvailableCopies() + change);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean updateBookDetailsAndInventory(Book webBook, int addCopies) {
+        try {
+            Book managedBook = findById(webBook.getId());
+            if (managedBook == null) return false;
+
+            managedBook.setTitle(webBook.getTitle());
+            managedBook.setImageUrl(webBook.getImageUrl());
+            managedBook.setDescription(webBook.getDescription());
+
+            if (addCopies != 0) {
+                boolean isAdmin = (addCopies > 1 || addCopies < -1);
+                if (isAdmin) {
+                    managedBook.setQuantity(managedBook.getQuantity() + addCopies);
+                }
+                managedBook.setAvailableCopies(managedBook.getAvailableCopies() + addCopies);
+            }
+            return true;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
@@ -53,17 +70,13 @@ public class BookDAO extends GenericDao<Book, Integer> {
     }
 
     public boolean addCopiesToExistingBook(int bookId, int amount) {
-        // Logic specific to administrative inventory adjustments
         boolean isAdmin = (amount > 1 || amount < -1);
         return updateInventory(bookId, amount, isAdmin);
     }
 
-    // =========================================================================
-    // SECTION 2: CUSTOMIZED LOOKUPS
-    // =========================================================================
+    // SECTION 2: CUSTOMIZED sorting
 
     public List<Book> getAllBooks() {
-        // Overrides standard findAll to ensure descending order for the UI
         return getEm().createQuery("SELECT b FROM Book b ORDER BY b.id DESC", Book.class)
                 .getResultList();
     }

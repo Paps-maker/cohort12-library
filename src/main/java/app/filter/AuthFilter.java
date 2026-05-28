@@ -18,37 +18,54 @@ public class AuthFilter implements Filter {
         HttpServletResponse resp = (HttpServletResponse) response;
         HttpSession session = req.getSession(false);
 
-        // Get the path relative to the context root (e.g., "/login" or "/authenticate")
         String path = req.getServletPath();
+        String fullUri = req.getRequestURI();
+        String contextPath = req.getContextPath();
 
-        // ✅ 1. Updated Comprehensive White-list
-        // Added "/authenticate" so the AuthController can actually log you in!
-        boolean isPublicPage = path.equals("/login") ||
-                path.equals("/authenticate") || // CRITICAL: Allows the POST request
-                path.equals("/") ||
+        // Safely normalize path defaults to prevent null pointer comparisons
+        if (path == null) {
+            path = "";
+        }
+
+        // 🌟 REFACTORED: API requests now completely bypass web session state checking.
+        // They pass through seamlessly here to be validated statelessly by your RestSecurityFilter.
+        boolean isApiRequest = path.startsWith("/api") || fullUri.startsWith(contextPath + "/api");
+
+        // Detect incoming SOAP Web Service infrastructure traffic routes
+        boolean isSoapRequest = path.startsWith("/BookWebService") || fullUri.startsWith(contextPath + "/BookWebService");
+
+        // Robust check for incoming WebSocket traffic routes across path configurations
+        boolean isWebSocket = path.startsWith("/websocket") ||
+                path.contains("/chat") ||
+                fullUri.contains("/websocket") ||
+                fullUri.contains("/chat");
+
+        // Clean public whitelist mappings matching automated controllers
+        boolean isPublicPage = path.equals("/") ||
+                path.equals("/login") ||
+                path.equals("/authenticate") ||
                 path.equals("/index.jsp") ||
                 path.equals("/register.jsp") ||
-                path.equals("/registerProcess") ||
-                path.equals("/contact.jsp") ||
-                path.equals("/contactdisplay.jsp") ||
-                path.equals("/submit-contact") ||
-                path.equals("/addbook");
+                path.equals("/account/register") ||
+                path.equals("/account/contact") ||
+                path.contains("contact.jsp") ||
+                path.equals("/BookWebService");
 
-        // Allow static assets
+        // Allow static assets to parse seamlessly
         boolean isStaticResource = path.startsWith("/css/") ||
                 path.startsWith("/js/") ||
                 path.startsWith("/images/");
 
-        // 2. Define Authentication Status
+        // Whitelist the /views/ directory for internal forward requests
+        boolean isInternalView = path.startsWith("/views/");
+
         boolean isLoggedIn = (session != null && session.getAttribute("username") != null);
 
-        // 3. Security Enforcement
-        if (isLoggedIn || isPublicPage || isStaticResource) {
-            // Authorized or Public: Proceed
+        // Security Enforcement Pipeline Flow
+        if (isLoggedIn || isPublicPage || isStaticResource || isApiRequest || isSoapRequest || isWebSocket || isInternalView) {
             chain.doFilter(request, response);
         } else {
-            // Unauthorized: Redirect to login
-            System.out.println("Blocked unauthorized access to: " + path);
+            System.out.println("AUTOMATION SECURITY: Blocked unauthorized web browser route attempt to: " + path + " [URI: " + fullUri + "]");
             resp.sendRedirect(req.getContextPath() + "/login");
         }
     }

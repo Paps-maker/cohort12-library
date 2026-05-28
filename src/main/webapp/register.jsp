@@ -59,7 +59,7 @@
     <p>Join the School Library system today.</p>
 
     <%--  ACTION changed to point to your new RegisterServlet --%>
-    <form action="registerProcess" method="post">
+    <form action="${pageContext.request.contextPath}/account/register" method="post">
         <label style="font-size: 13px; font-weight: 600;">Username</label>
         <input type="text" name="username" placeholder="official name's" required/>
 
