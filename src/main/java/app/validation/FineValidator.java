@@ -2,27 +2,21 @@ package app.validation;
 
 import app.dao.FineDAO;
 import app.model.Fine;
-import jakarta.inject.Inject;            // ✅ Added for Managed Injection
-import jakarta.inject.Named;             // ✅ The Built-in Qualifier
-import jakarta.enterprise.context.RequestScoped; // ✅ Lifecycle Management
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.enterprise.context.RequestScoped;
 
 /**
- * ✅ BUSINESS RULE ENGINE: Fine Payment Validation
- * Marked with @Named to allow WildFly to inject it into the Service Layer.
+ * VALIDATION LAYER: FINES
+ * Refactored to align with GenericDao for the Assessment-1-Livingstone Project.
  */
-@Named("fineValidator") // Built-in Qualifier name
-@RequestScoped          // This validator lives only for the duration of one request
+@Named("fineValidator")
+@RequestScoped
 public class FineValidator {
 
     @Inject
-    private FineDAO fineDAO; // ✅ UPDATED: Now injected, not manually instantiated
+    private FineDAO fineDAO;
 
-    /**
-     * ✅ FULL VALIDATION: Checks existence, ownership, and status.
-     * @param username The user attempting the payment.
-     * @param fineIdStr The raw ID string from the web form.
-     * @return String error message if invalid, or null if validation passes.
-     */
     public String validatePayment(String username, String fineIdStr) {
 
         // 1. Basic Format Check
@@ -38,13 +32,14 @@ public class FineValidator {
         }
 
         // 2. Existence Check
-        Fine existingFine = fineDAO.getFineById(fineId);
+        // ✅ Standardized method from GenericDao (replaces getFineById)
+        Fine existingFine = fineDAO.findById(fineId);
         if (existingFine == null) {
             return "Error: Fine record not found in the system.";
         }
 
         // 3. Ownership Security Check
-        // Ensures users can't pay for someone else's fines by guessing IDs
+        // Prevents users from manipulating URL parameters to pay others' fines
         if (!existingFine.getUsername().equalsIgnoreCase(username)) {
             return "Error: Security Violation. This fine does not belong to your account.";
         }
@@ -59,6 +54,6 @@ public class FineValidator {
             return "Error: This fine has no outstanding balance.";
         }
 
-        return null; // All checks passed!
+        return null; // Validation successful
     }
 }

@@ -15,7 +15,7 @@ public class AppContextListener implements ServletContextListener {
     @Override
     public void contextInitialized(ServletContextEvent sce) {
 
-        System.out.println("🚀 DUAL-DATABASE APPLICATION STARTING...");
+        System.out.println(" DUAL-DATABASE APPLICATION STARTING...");
 
         try {
             // 1. Initialize BOTH DB connections (Triggers 'CREATE DATABASE' logic)
@@ -28,11 +28,11 @@ public class AppContextListener implements ServletContextListener {
             Class<?>[] entities = EntityScanner.getEntities("app.model");
 
             if (entities == null || entities.length == 0) {
-                System.out.println("⚠️ No entities found in app.model. Check your package folder structure.");
+                System.out.println(" No entities found in app.model. Check your package folder structure.");
                 return;
             }
 
-            System.out.println("🔍 Entities found: " + Arrays.toString(entities));
+            System.out.println(" Entities found: " + Arrays.toString(entities));
 
             // 3. Create tables dynamically for BOTH databases
             for (Class<?> entity : entities) {
@@ -41,21 +41,21 @@ public class AppContextListener implements ServletContextListener {
                     TableCreator.createTable(entity, "MYSQL");
                     TableCreator.createTable(entity, "POSTGRES");
                 } catch (Exception e) {
-                    System.err.println("❌ Failed to sync tables for entity: " + entity.getSimpleName());
+                    System.err.println(" Failed to sync tables for entity: " + entity.getSimpleName());
                     e.printStackTrace();
                 }
             }
 
-            System.out.println("🎊 DUAL-DATABASE INITIALIZATION COMPLETE");
+            System.out.println(" DUAL-DATABASE INITIALIZATION COMPLETE");
 
         } catch (Exception e) {
-            System.err.println("🚨 CRITICAL SYSTEM STARTUP FAILED");
+            System.err.println(" CRITICAL SYSTEM STARTUP FAILED");
             e.printStackTrace();
         }
     }
 
     @Override
     public void contextDestroyed(ServletContextEvent sce) {
-        System.out.println("🛑 APPLICATION STOPPED");
+        System.out.println(" APPLICATION STOPPED");
     }
 }

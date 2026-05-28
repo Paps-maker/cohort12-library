@@ -1,206 +1,121 @@
 package app.dao;
 
 import app.model.Fine;
-import jakarta.annotation.Resource;
 import jakarta.enterprise.context.ApplicationScoped;
-import javax.sql.DataSource;
-import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import jakarta.transaction.Transactional;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * DATA ACCESS OBJECT: FINES
- * Manages database interactions for recorded debts.
+ * Optimized to inherit CRUD from GenericDao
  */
 @ApplicationScoped
-public class FineDAO {
+@Transactional
+public class FineDAO extends GenericDao<Fine, Integer> {
 
-    @Resource(lookup = "java:jboss/datasources/LibraryDS")
-    private DataSource dataSource;
+    //  REUSE DATE FORMATTER: Avoid creating new formatter instances inside loops
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    private Connection getMySQLCon() {
-        try {
-            return dataSource.getConnection();
-        } catch (SQLException e) {
-            System.err.println("❌ FineDAO: Connection failed from WildFly Pool");
-            return null;
-        }
-    }
+    // SECTION 1: SPECIALIZED RETRIEVAL (Reporting)
 
-    // =========================================================================
-    // SECTION 1: RETRIEVAL
-    // =========================================================================
 
-    public Fine getFineById(int fineId) {
-        String sql = "SELECT * FROM fine WHERE id = ?";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return null;
-            ps.setInt(1, fineId);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    Fine fine = new Fine();
-                    fine.setId(rs.getInt("id"));
-                    fine.setUsername(rs.getString("username"));
-                    fine.setAmount(rs.getDouble("amount"));
-                    fine.setStatus(rs.getString("status"));
-                    fine.setDaysOverdue(rs.getInt("daysOverdue"));
-                    fine.setBorrowId(rs.getInt("borrowId"));
-                    return fine;
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
 
-    /**
-     * ✅ MEMBER VIEW: Returns formatted list for history display.
-     */
+     // MEMBER VIEW: Optimized JPQL path navigation to fetch book titles directly.
+
     public List<String> getUserFines(String username) {
-        List<String> list = new ArrayList<>();
-        String sql = "SELECT id, amount, status, created_at FROM fine WHERE username = ? ORDER BY created_at DESC";
+        List<Object[]> results = getEm().createQuery(
+                        "SELECT f.id, f.createdAt, f.amount, f.status, f.book.title " +
+                                "FROM Fine f " +
+                                "WHERE LOWER(f.user.username) = LOWER(:user) ORDER BY f.createdAt DESC", Object[].class)
+                .setParameter("user", username.trim())
+                .getResultList();
 
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return list;
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    int id = rs.getInt("id");
-                    String status = rs.getString("status");
-                    double amt = rs.getDouble("amount");
-                    Timestamp ts = rs.getTimestamp("created_at");
+        return results.stream()
+                .map(res -> {
+                    //  : Parse LocalDateTime
+                    String formattedDate = "N/A";
+                    if (res[1] != null) {
+                        formattedDate = ((LocalDateTime) res[1]).format(DATE_FORMATTER);
+                    }
 
-                    String row = "ID: " + id + " | ";
-                    row += (amt == 0) ? "Returned on time" : "Fine: KSH " + String.format("%.2f", amt);
-                    row += " | Status: " + status + " | Date: " + (ts != null ? ts.toString() : "N/A");
-
-                    list.add(row);
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return list;
+                    return res[0] + " | " +
+                            formattedDate + " | " +
+                            String.format("%.2f", (Double) res[2]) + " | " +
+                            res[3] + " | " +
+                            "Book: " + (res[4] != null ? res[4] : "Unknown Book");
+                })
+                .collect(Collectors.toList());
     }
 
-    /**
-     * ✅ ADMIN VIEW: Returns overview of all fines in the system.
-     */
+
+     //ADMIN VIEW: Full system audit trail.
+
     public List<String> getAllFines() {
-        List<String> list = new ArrayList<>();
-        String sql = "SELECT id, username, amount, status, created_at FROM fine ORDER BY created_at DESC";
+        List<Object[]> results = getEm().createQuery(
+                        "SELECT f.id, f.user.username, f.amount, f.status, f.createdAt, f.book.title " +
+                                "FROM Fine f " +
+                                "ORDER BY f.createdAt DESC", Object[].class)
+                .getResultList();
 
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return list;
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    list.add("ID: " + rs.getInt("id") + " | User: " + rs.getString("username").toUpperCase() +
-                            " | KSH " + String.format("%.2f", rs.getDouble("amount")) +
-                            " | Status: " + rs.getString("status"));
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return list;
+        return results.stream()
+                .map(res -> {
+                    //  FIX: Parse LocalDateTime safely for Admin overview
+                    String formattedDate = "N/A";
+                    if (res[4] != null) {
+                        formattedDate = ((LocalDateTime) res[4]).format(DATE_FORMATTER);
+                    }
+
+                    return res[0] + " | User: " + res[1].toString().toUpperCase() + " | " +
+                            String.format("%.2f", (Double) res[2]) + " | " +
+                            res[3] + " | " +
+                            formattedDate + " | " +
+                            "Book: " + (res[5] != null ? res[5] : "[Deleted]");
+                })
+                .collect(Collectors.toList());
     }
 
-    // =========================================================================
-    // SECTION 2: CALCULATIONS
-    // =========================================================================
+
+    // SECTION 2: AGGREGATE CALCULATIONS
+
 
     public double getTotalUnpaid(String username) {
-        String sql = "SELECT SUM(amount) FROM fine WHERE username = ? AND status = 'UNPAID'";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return 0.0;
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    double total = rs.getDouble(1);
-                    return rs.wasNull() ? 0.0 : total;
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return 0.0;
+        Double total = getEm().createQuery(
+                        "SELECT SUM(f.amount) FROM Fine f WHERE LOWER(f.user.username) = LOWER(:user) AND f.status = 'UNPAID'", Double.class)
+                .setParameter("user", username.trim())
+                .getSingleResult();
+        return (total != null) ? total : 0.0;
     }
 
     public double getSystemTotalUnpaid() {
-        String sql = "SELECT SUM(amount) FROM fine WHERE status = 'UNPAID'";
-        try (Connection con = getMySQLCon();
-             Statement s = con.createStatement();
-             ResultSet rs = s.executeQuery(sql)) {
-            if (rs.next()) {
-                double total = rs.getDouble(1);
-                return rs.wasNull() ? 0.0 : total;
+        Double total = getEm().createQuery(
+                        "SELECT SUM(f.amount) FROM Fine f WHERE f.status = 'UNPAID'", Double.class)
+                .getSingleResult();
+        return (total != null) ? total : 0.0;
+    }
+
+    // =========================================================================
+    // SECTION 3: BUSINESS LOGIC
+    // =========================================================================
+
+    /**
+     * Standard update logic for payments.
+     * Uses inherited findById and save (merge).
+     */
+    public boolean payFine(int fineId) {
+        try {
+            Fine fine = findById(fineId);
+            if (fine != null) {
+                fine.setStatus("PAID");
+                fine.setAmount(0.0); // 🌟 EQUILIBRIUM ARCHITECTURE: Synchronize payment clearance down to table level
+                save(fine);
+                return true;
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return 0.0;
-    }
-
-    // =========================================================================
-    // SECTION 3: WRITE OPERATIONS
-    // =========================================================================
-
-    public boolean insertFine(String username, double amount, int daysOverdue, int borrowId) {
-        String sql = "INSERT INTO fine (username, amount, daysOverdue, borrowId, status, created_at) VALUES (?, ?, ?, ?, 'UNPAID', ?)";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return false;
-            ps.setString(1, username);
-            ps.setDouble(2, amount);
-            ps.setInt(3, daysOverdue);
-            ps.setInt(4, borrowId);
-            ps.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
-            return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            System.err.println("❌ FineDAO: Error inserting fine record for " + username);
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    public boolean payFine(int fineId) {
-        String sql = "UPDATE fine SET status = 'PAID' WHERE id = ?";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return false;
-            ps.setInt(1, fineId);
-            return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            System.err.println("❌ FineDAO: Error processing payment for ID: " + fineId);
-            e.printStackTrace();
-        }
         return false;
-    }
-
-    // =========================================================================
-    // SECTION 4: DELETE OPERATIONS
-    // =========================================================================
-
-    /**
-     * ✅ NEW: Supports the Admin delete button.
-     */
-    public boolean deleteFine(int fineId) {
-        String sql = "DELETE FROM fine WHERE id = ?";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            if (con == null) return false;
-            ps.setInt(1, fineId);
-            return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            System.err.println("❌ FineDAO: Error deleting fine record ID: " + fineId);
-            e.printStackTrace();
-            return false;
-        }
     }
 }

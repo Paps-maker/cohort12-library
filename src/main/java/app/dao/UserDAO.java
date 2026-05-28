@@ -1,196 +1,106 @@
 package app.dao;
 
 import app.model.User;
-import app.db.DBConnection;
-import jakarta.annotation.Resource;
 import jakarta.enterprise.context.ApplicationScoped;
-import javax.sql.DataSource;
-
-import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import jakarta.persistence.NoResultException;
+import jakarta.transaction.Transactional;
 
 @ApplicationScoped
-public class UserDAO {
+@Transactional
+public class UserDAO extends GenericDao<User, Integer> {
 
-    // ✅ NEW: Injected from standalone.xml (Must match your JNDI name)
-    @Resource(lookup = "java:jboss/datasources/LibraryDS")
-    private DataSource mysqlDataSource;
+    // =========================================================================
+    // SECTION 1: AUTHENTICATION & LOOKUP
+    // =========================================================================
 
-    // ✅ UPDATED: Now pulls from the WildFly Connection Pool
-    private Connection getMySQLCon() {
+    public User findUser(String username, String password) {
         try {
-            return mysqlDataSource.getConnection();
-        } catch (SQLException e) {
-            System.err.println("❌ MySQL Pool Error: Ensure standalone.xml URL has library_2 (lowercase)");
+            return getEm().createQuery(
+                            "SELECT u FROM User u WHERE u.username = :user AND u.password = :pass", User.class)
+                    .setParameter("user", username)
+                    .setParameter("pass", password)
+                    .getSingleResult();
+        } catch (NoResultException e) {
             return null;
         }
     }
 
-    // ✅ KEEPING: Postgres stays manual as per your setup
-    private Connection getPostgresCon() {
-        return DBConnection.getPostgresConnection();
+    public User findUserByUsername(String username) {
+        try {
+            return getEm().createQuery(
+                            "SELECT u FROM User u WHERE u.username = :user", User.class)
+                    .setParameter("user", username)
+                    .getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
     }
 
-    // =========================================================================
-    // SECTION 1: AUTHENTICATION (The Login Fix)
-    // =========================================================================
-
-    public User findUser(String username, String password) {
-        // ✅ BACKTICKS: Used to ensure we target your table in library_2, not system tables
-        String sql = "SELECT * FROM `user` WHERE username=? AND password=?";
-
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-
-            if (con == null) return null;
-            ps.setString(1, username);
-            ps.setString(2, password);
-
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return mapUser(rs);
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("❌ LOGIN QUERY FAILED");
-            e.printStackTrace();
+    /**
+     * ✅ NEW: Added for Jakarta Security Identity Store bridging.
+     * Validates credentials and returns the user's uppercase role string.
+     */
+    public String validateUserCredentials(String username, String password) {
+        User user = findUser(username, password);
+        if (user != null && user.getRole() != null) {
+            return user.getRole().toUpperCase();
         }
         return null;
     }
 
-    // =========================================================================
-    // SECTION 2: USER MANAGEMENT (Dual-Write Logic)
-    // =========================================================================
-
-    public boolean createUser(User user) {
-        String mysqlSql = "INSERT INTO `user`(username, email, password, role) VALUES(?,?,?,?)";
-        String pgSql = "INSERT INTO \"user\"(username, email, password, role) VALUES(?,?,?,?)";
-
-        // Using try-with-resources internally via utility methods ensures closure
-        boolean mysqlSaved = executeWrite(getMySQLCon(), mysqlSql, user.getUsername(), user.getEmail(), user.getPassword(), user.getRole());
-        boolean postgresSaved = executeWrite(getPostgresCon(), pgSql, user.getUsername(), user.getEmail(), user.getPassword(), user.getRole());
-
-        System.out.println("📝 DUAL-INSERT: MySQL=" + mysqlSaved + " | Postgres=" + postgresSaved);
-        return mysqlSaved || postgresSaved;
-    }
-
-    public boolean updateUser(User user) {
-        String mysqlSql = "UPDATE `user` SET username=?, email=?, role=? WHERE id=?";
-        String pgSql = "UPDATE \"user\" SET username=?, email=?, role=? WHERE id=?";
-
-        boolean mysqlUpd = executeUpdate(getMySQLCon(), mysqlSql, user);
-        boolean postgresUpd = executeUpdate(getPostgresCon(), pgSql, user);
-
-        return mysqlUpd || postgresUpd;
-    }
-
-    public boolean deleteUser(int id) {
-        String mysqlSql = "DELETE FROM `user` WHERE id=?";
-        String pgSql = "DELETE FROM \"user\" WHERE id=?";
-
-        boolean mysqlDel = executeDelete(getMySQLCon(), mysqlSql, id);
-        boolean postgresDel = executeDelete(getPostgresCon(), pgSql, id);
-
-        return mysqlDel || postgresDel;
-    }
-
-    // =========================================================================
-    // SECTION 3: UTILITY METHODS (Correctly returning pooled connections)
-    // =========================================================================
-
-    private boolean executeWrite(Connection con, String sql, String... params) {
-        if (con == null) return false;
-        try (con; PreparedStatement ps = con.prepareStatement(sql)) { // ✅ con inside try-with ensures it returns to pool
-            for (int i = 0; i < params.length; i++) {
-                ps.setString(i + 1, params[i]);
-            }
-            return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            return false;
+    /**
+     * ✅ NEW: Added for FineScheduler email lookups.
+     * Pulls the corresponding email address directly based on the borrower's username.
+     */
+    public String getEmailByUsername(String username) {
+        try {
+            return getEm().createQuery(
+                            "SELECT u.email FROM User u WHERE u.username = :user", String.class)
+                    .setParameter("user", username)
+                    .getSingleResult();
+        } catch (NoResultException e) {
+            System.err.println("⚠️ UserDAO: No email found for username: " + username);
+            return null;
         }
     }
 
-    private boolean executeUpdate(Connection con, String sql, User user) {
-        if (con == null) return false;
-        try (con; PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, user.getUsername());
-            ps.setString(2, user.getEmail());
-            ps.setString(3, user.getRole());
-            ps.setInt(4, user.getId());
-            return ps.executeUpdate() > 0;
-        } catch (Exception e) {
+    // =========================================================================
+    // SECTION 2: VALIDATION & WHITELISTING
+    // =========================================================================
+
+    /**
+     * Added to resolve Walk-In Student Verification requirements.
+     * Checks if a user profile exists matching either the specified username or email.
+     */
+    public boolean checkUserExists(String identifier) {
+        if (identifier == null || identifier.trim().isEmpty()) {
             return false;
         }
+
+        Long count = getEm().createQuery(
+                        "SELECT COUNT(u) FROM User u WHERE u.username = :id OR u.email = :id", Long.class)
+                .setParameter("id", identifier.trim())
+                .getSingleResult();
+
+        return count > 0;
     }
 
-    private boolean executeDelete(Connection con, String sql, int id) {
-        if (con == null) return false;
-        try (con; PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            return ps.executeUpdate() > 0;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    private User mapUser(ResultSet rs) throws SQLException {
-        return new User(
-                rs.getInt("id"),
-                rs.getString("username"),
-                rs.getString("email"),
-                rs.getString("password"),
-                rs.getString("role")
-        );
-    }
-
-    public List<User> getAllUsers() {
-        List<User> users = new ArrayList<>();
-        String sql = "SELECT * FROM `user`";
-        try (Connection con = getMySQLCon();
-             Statement stmt = con.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) { users.add(mapUser(rs)); }
-        } catch (Exception e) { }
-        return users;
-    }
     public boolean emailExists(String email) {
-        String sql = "SELECT COUNT(*) FROM users WHERE email = ?";
-        try (Connection con = getMySQLCon(); // Use your existing connection method
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, email);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1) > 0;
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
+        Long count = getEm().createQuery(
+                        "SELECT COUNT(u) FROM User u WHERE u.email = :email", Long.class)
+                .setParameter("email", email)
+                .getSingleResult();
+        return count > 0;
     }
+
     public String getWhitelistedRole(String email) {
-        String sql = "SELECT assigned_role FROM authorized_emails WHERE email = ?";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setString(1, email);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getString("assigned_role"); // Return the role (STUDENT/TEACHER)
-                }
-            }
-        } catch (SQLException e) { e.printStackTrace(); }
-        return null; // Email is not whitelisted
-    }
-    public User getUserById(int id) {
-        String sql = "SELECT * FROM `user` WHERE id=?";
-        try (Connection con = getMySQLCon();
-             PreparedStatement ps = con.prepareStatement(sql)) {
-            ps.setInt(1, id);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) return mapUser(rs);
-            }
-        } catch (Exception e) { }
-        return null;
+        try {
+            return (String) getEm().createNativeQuery(
+                            "SELECT assigned_role FROM authorized_emails WHERE email = ?")
+                    .setParameter(1, email)
+                    .getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
     }
 }

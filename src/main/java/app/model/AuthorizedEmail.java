@@ -13,20 +13,12 @@ public class AuthorizedEmail {
     @Column(name = "assigned_role", nullable = false)
     private String assignedRole;
 
-    // ==========================================
-    // CONSTRUCTORS
-    // ==========================================
-
     public AuthorizedEmail() {}
 
     public AuthorizedEmail(String email, String assignedRole) {
         this.email = email;
         this.assignedRole = assignedRole;
     }
-
-    // ==========================================
-    // GETTERS AND SETTERS
-    // ==========================================
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }

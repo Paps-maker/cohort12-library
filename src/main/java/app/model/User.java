@@ -1,6 +1,10 @@
 package app.model;
 
 import jakarta.persistence.*;
+import jakarta.json.bind.annotation.JsonbTransient;
+import jakarta.xml.bind.annotation.XmlTransient;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "user")
@@ -21,14 +25,24 @@ public class User {
 
     private String role;
 
+    // 🌟 ADDED: JsonbTransient breaks serialization loops between users and their loan rows
+    @JsonbTransient
+    @XmlTransient
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<BorrowedBook> borrowings = new ArrayList<>();
+
+    // 🌟 ADDED: JsonbTransient breaks serialization loops between users and their unpaid/paid fines
+    @JsonbTransient
+    @XmlTransient
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL)
+    private List<Fine> fines = new ArrayList<>();
+
     // =========================
     // CONSTRUCTORS
     // =========================
 
-    // Essential: JPA/Frameworks often require a no-arg constructor
     public User() {}
 
-    // Constructor (used when registering)
     public User(String username, String email, String password, String role) {
         this.username = username;
         this.email = email;
@@ -36,7 +50,6 @@ public class User {
         this.role = role;
     }
 
-    // Constructor (used when reading from DB)
     public User(int id, String username, String email, String password, String role) {
         this.id = id;
         this.username = username;
@@ -63,4 +76,10 @@ public class User {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
+    public List<BorrowedBook> getBorrowings() { return borrowings; }
+    public void setBorrowings(List<BorrowedBook> borrowings) { this.borrowings = borrowings; }
+
+    public List<Fine> getFines() { return fines; }
+    public void setFines(List<Fine> fines) { this.fines = fines; }
 }

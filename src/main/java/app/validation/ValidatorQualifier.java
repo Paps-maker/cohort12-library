@@ -14,6 +14,6 @@ public @interface ValidatorQualifier {
     ValidationChoice value();
 
     public enum ValidationChoice {
-        BOOK, RETURN, BORROW, FINE, RESERVATION
+        BOOK, RETURN, BORROW, FINE
     }
 }

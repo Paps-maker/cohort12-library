@@ -1,70 +1,69 @@
 package app.model;
 
 import jakarta.persistence.*;
+import jakarta.json.bind.annotation.JsonbTransient;
+import jakarta.xml.bind.annotation.XmlTransient;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * Representing the Join Table for Borrowing.
- * Includes borrowDate and dueDate to support dynamic return dates.
- */
 @Entity
 @Table(name = "borrowedbook")
 public class BorrowedBook {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id") // Explicitly naming the ID column
     private int id;
 
-    @Column(nullable = false)
-    private String username;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
-    @Column(nullable = false)
-    private int bookId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "book_id", nullable = false)
+    private Book book;
 
-    /**
-     * The date and time the book was borrowed.
-     */
+    // 🌟 ADDED: JsonbTransient breaks serialization loops down into the fine records
+    @JsonbTransient
+    @XmlTransient
+    @OneToMany(mappedBy = "borrowedBook", cascade = CascadeType.REMOVE, orphanRemoval = true)
+    private List<Fine> fines = new ArrayList<>();
+
     @Column(name = "borrow_date", nullable = false)
     private LocalDateTime borrowDate;
 
-    /**
-     * ✅ NEW: The custom deadline chosen by the user.
-     * This matches the 'due_date' column added via MySQL.
-     */
     @Column(name = "due_date")
     private LocalDateTime dueDate;
 
-    // =========================
-    // CONSTRUCTORS
-    // =========================
+    // Constructors
     public BorrowedBook() {
         this.borrowDate = LocalDateTime.now();
     }
 
-    public BorrowedBook(String username, int bookId, int daysToBorrow) {
-        this.username = username;
-        this.bookId = bookId;
+    public BorrowedBook(User user, Book book, int daysToBorrow) {
+        this.user = user;
+        this.book = book;
         this.borrowDate = LocalDateTime.now();
-        // Automatically calculate the due date based on input
         this.dueDate = this.borrowDate.plusDays(daysToBorrow);
     }
 
-    // =========================
-    // GETTERS AND SETTERS
-    // =========================
+    // Getters and Setters
     public int getId() { return id; }
     public void setId(int id) { this.id = id; }
 
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
 
-    public int getBookId() { return bookId; }
-    public void setBookId(int bookId) { this.bookId = bookId; }
+    public Book getBook() { return book; }
+    public void setBook(Book book) { this.book = book; }
 
     public LocalDateTime getBorrowDate() { return borrowDate; }
     public void setBorrowDate(LocalDateTime borrowDate) { this.borrowDate = borrowDate; }
 
-    // ✅ Added Getter and Setter for the new column
     public LocalDateTime getDueDate() { return dueDate; }
     public void setDueDate(LocalDateTime dueDate) { this.dueDate = dueDate; }
+
+    public List<Fine> getFines() { return fines; }
+    public void setFines(List<Fine> fines) { this.fines = fines; }
 }
