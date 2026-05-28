@@ -13,18 +13,10 @@ public class UserDAO extends GenericDao<User, Integer> {
     // SECTION 1: AUTHENTICATION & LOOKUP
     // =========================================================================
 
-    public User findUser(String username, String password) {
-        try {
-            return getEm().createQuery(
-                            "SELECT u FROM User u WHERE u.username = :user AND u.password = :pass", User.class)
-                    .setParameter("user", username)
-                    .setParameter("pass", password)
-                    .getSingleResult();
-        } catch (NoResultException e) {
-            return null;
-        }
-    }
-
+    /**
+     * ✅ UPDATED: Now only finds user by username.
+     * PASSWORD VERIFICATION IS HANDLED IN THE SERVICE LAYER (UserBean)
+     */
     public User findUserByUsername(String username) {
         try {
             return getEm().createQuery(
@@ -37,21 +29,15 @@ public class UserDAO extends GenericDao<User, Integer> {
     }
 
     /**
-     * ✅ NEW: Added for Jakarta Security Identity Store bridging.
-     * Validates credentials and returns the user's uppercase role string.
+     * ❌ REMOVED: findUser(String, String)
+     * NEVER query for a user by password in the database again.
      */
-    public String validateUserCredentials(String username, String password) {
-        User user = findUser(username, password);
-        if (user != null && user.getRole() != null) {
-            return user.getRole().toUpperCase();
-        }
-        return null;
-    }
 
     /**
-     * ✅ NEW: Added for FineScheduler email lookups.
-     * Pulls the corresponding email address directly based on the borrower's username.
+     * ❌ REMOVED: validateUserCredentials(...)
+     * This logic is now handled in the UserBean using PasswordHasher.verify().
      */
+
     public String getEmailByUsername(String username) {
         try {
             return getEm().createQuery(
@@ -59,7 +45,6 @@ public class UserDAO extends GenericDao<User, Integer> {
                     .setParameter("user", username)
                     .getSingleResult();
         } catch (NoResultException e) {
-            System.err.println("⚠️ UserDAO: No email found for username: " + username);
             return null;
         }
     }
@@ -68,14 +53,8 @@ public class UserDAO extends GenericDao<User, Integer> {
     // SECTION 2: VALIDATION & WHITELISTING
     // =========================================================================
 
-    /**
-     * Added to resolve Walk-In Student Verification requirements.
-     * Checks if a user profile exists matching either the specified username or email.
-     */
     public boolean checkUserExists(String identifier) {
-        if (identifier == null || identifier.trim().isEmpty()) {
-            return false;
-        }
+        if (identifier == null || identifier.trim().isEmpty()) return false;
 
         Long count = getEm().createQuery(
                         "SELECT COUNT(u) FROM User u WHERE u.username = :id OR u.email = :id", Long.class)
@@ -99,7 +78,7 @@ public class UserDAO extends GenericDao<User, Integer> {
                             "SELECT assigned_role FROM authorized_emails WHERE email = ?")
                     .setParameter(1, email)
                     .getSingleResult();
-        } catch (NoResultException e) {
+        } catch (Exception e) {
             return null;
         }
     }

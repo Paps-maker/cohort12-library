@@ -1,46 +1,66 @@
-world wide web - www
-tcp/ip
+WebSocket Routing Pipeline
+This visualization maps out how your endpoint acts as a real-time switchboard—handling data-sync broadcasts to librarians while maintaining isolated, targeted messaging routes back to student channels:
 
-HTML - HYPERTEXT MARKUP LANGUAGE - TEXT FORMAT 
-HTTP - HYPERTEXT TRANSFER PROTOCOL - PROTOCOL
-CLIENT - BROWSER/PHONE/ETC
-SERVER - GIVES INFORMATION-MESSAGE
+  [ Student Client Connection ]                [ Librarian Connection ]
+   ws://.../chat?username=Oduor                 ws://.../chat?role=librarian
+                 │                                           │
+                 ▼                                           ▼
+      OnOpen: Registers into                      OnOpen: Registers into
+      `clientSessions` map                       `librarianSessions` set
+                 │                                           │
+                 │ Sends Text Message                        │ Sends Reply JSON
+                 ▼                                           ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        LibraryChatEndpoint                             │
+├────────────────────────────────────────────────────────────────────────┤
+│ OnMessage Logic Interception:                                          │
+│                                                                        │
+│ • Case A: Message from Student                                         │
+│   1. Extracts raw JSON chat payload.                                   │
+│   2. Echoes text back to Student's isolated channel.                   │
+│   3. Broadcasts text out to ALL active Librarian dashboards.           │
+│   4. Stateful Trigger: Checks `firstMessageTracker` flag.              │
+│       ├── If True ──► Instantly fires automated Helpdesk Chatbot.      │
+│       └── If False ──► Skips chatbot execution loop.                   │
+│                                                                        │
+│ • Case B: Message from Librarian                                        │
+│   1. Extracts `targetSessionId` target key.                            │
+│   2. Bypasses other students; routes straight to target student link.  │
+│   3. Syncs the message layout across all other Librarian screens.       │
+└────────────────────────────────────────────────────────────────────────┘
 
-          REQUEST (URL)
-	   ------------->
-CLIENT                 SERVER
-	   <-------------
-	   	  RESPONSE (PAGE/DATA - HTML)
-	   	  
-	   	  
-WEB APPLICATION
-APPLICATION RUNNING OVER THE WEB, IT CAN BE A WEBSITE, DYNAMIC DATA AND PAGES - ENTREPRISE APPLICATION
+Thread-Safe Memory Concurrency
+Java
+private static final ConcurrentHashMap<String, String> sessionUsernames = new ConcurrentHashMap<>();
+private static final ConcurrentHashMap<String, Session> clientSessions = new ConcurrentHashMap<>();
+private static final Set<Session> librarianSessions = Collections.synchronizedSet(new HashSet<>());
+The Design Strategy: You are using thread-safe data structures (ConcurrentHashMap, Collections.synchronizedSet) explicitly declared as static across the application container scope.
 
-HTTP (HTTP PROTOCOL) - TRANSFER IN OUR WEB APPLICATION
-WEB SERVER - TOMCAT/WILDFLY
+Why It Matters: WebSocket connections are highly asynchronous;
+ hundreds of users can open connections, close windows, or send data frames at the exact same millisecond.
+ Using basic arrays or standard HashMaps would instantly trigger a ConcurrentModificationException or result in memory leaks.
+ Your layout guarantees thread safety across separate connection threads without locking up the server.
 
-HTTP REQUEST
-METHODS: 
-	GET - 
-	POST -
-	DELETE
-	PUT
-	UPDATE
-	PATCH
-	
-SERVLET
-JAVA PROGRAMS RUNNING INSIDE JVM THAT RESPONDS TO HTTP REQUEST.
 
-1. READ DATA
-2. PROCESS DATA
-3. RESPONDS TO THE REQUEST
+ What Do "Ping" and "Pong" Actually Do?
+ Java
+ if ("ping".equals(message)) {
+     try { session.getBasicRemote().sendText("pong"); } catch (IOException ignored) {}
+     return;
+ }
+ This tiny block of code solves a major real-world networking problem: Silent Disconnections (Ghost Connections).
 
-SERVLET CONTAINER - WEB SERVER- TOMCAT-WILDFLY
+ The Problem: TCP Idle Timeouts & Firewalls
+ When a student opens a chat tab but doesn't type a message for a few minutes, the connection becomes idle. Network routers, firewalls, and cloud providers (like AWS or Heroku) hate idle TCP connections because they waste resources. If a connection stays silent for too long (often 30 to 60 seconds), firewalls will silently terminate the connection without telling either the server or the client.
 
-SERVLET API - WE NEED SERVLET APIs to create servlet
+ To the server, the session looks open, but any message sent into it disappears into a black hole.
 
-Wildfly
-change directory to wildfly-version/bin
-unix/linux - sh standalone.sh or ./standalone.sh
-windows - standalone.bat
+ The Solution: The Heartbeat Mechanism
+ To prevent idle timeouts, the client application is programmed to send a small, lightweight text frame—"ping"—every few seconds.
 
+ Keep-Alive: Sending a message resets the idle timeout clock on every router and firewall along the way, keeping the tunnel open.
+
+ The Pong Acknowledgement: When your server interceptor sees "ping", it instantly echoes back "pong". This tells the client browser, "The server is alive and listening."
+
+ Low Overhead: By using an immediate return; statement, you bypass all the heavy chatbot logic, regex parsing, and librarian broadcast loops.
+ The ping/pong exchange happens completely in memory in less than a millisecond.

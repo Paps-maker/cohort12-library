@@ -41,9 +41,8 @@ public class FineBean {
         this.fineValidator = fineValidator;
     }
 
-    // =========================================================================
-    // 📊 BASIC READ OPERATIONS
-    // =========================================================================
+
+    //  BASIC READ OPERATIONS
 
     public double getUnpaidFines(String username) {
         if (username == null || username.trim().isEmpty()) return 0.0;
@@ -59,9 +58,9 @@ public class FineBean {
         return fineDao.getAllFines();
     }
 
-    // =========================================================================
-    // 📊 ANALYTICS DATA PROVIDERS & MAP MAPPERS
-    // =========================================================================
+
+    //  ANALYTICS DATA PROVIDERS & MAP MAPPERS
+
 
     /**
      * Maps active fines grouped by user.
@@ -85,7 +84,7 @@ public class FineBean {
     public List<Double> getLastSevenDaysDebt() {
         List<Double> sevenDayTrend = new ArrayList<>();
         try {
-            // 🌟 FIX: Changed 'f.dateCreated' to match your Fine.java property field 'f.createdAt'
+            // 'f.dateCreated' to match your Fine.java property field 'f.createdAt'
             String query = "SELECT SUM(f.amount) FROM Fine f " +
                     "WHERE f.createdAt >= :startDate " +
                     "GROUP BY FUNCTION('DATE', f.createdAt) " +
@@ -107,9 +106,8 @@ public class FineBean {
         return sevenDayTrend;
     }
 
-    // =========================================================================
-    // 💸 TRANSACTIONAL MUTATIONS & PAYMENT FLOWS
-    // =========================================================================
+
+    //  TRANSACTIONAL MUTATIONS & PAYMENT FLOWS
 
     public boolean processFinePayment(String username, String fineIdParam) {
         if (fineValidator.validatePayment(username, fineIdParam) != null) return false;
@@ -117,18 +115,18 @@ public class FineBean {
         try {
             int fineId = Integer.parseInt(fineIdParam.trim());
 
-            // 🌟 TRANSACTION REDUCTION ARCHITECTURE: Update entity via EntityManager directly to drop the balance state
+            //  TRANSACTION REDUCTION ARCHITECTURE: Update entity via EntityManager directly to drop the balance state
             Fine fine = em.find(Fine.class, fineId);
             if (fine != null && "UNPAID".equalsIgnoreCase(fine.getStatus())) {
                 fine.setStatus("PAID");
-                fine.setAmount(0.0); // 🌟 Drops outstanding fee amounts to 0 instantly on payment interaction
+                fine.setAmount(0.0); //  Drops outstanding fee amounts to 0 instantly on payment interaction
                 em.merge(fine);
 
                 // Keep DAO sync fallback layer if fineDao has external state logic
                 fineDao.payFine(fineId);
 
-                // 🌟 WEBSOCKET BROADCAST: Broadcast fine clearing transactions
-                SystemActivityServer.broadcastActivity("💸 FINE SETTLED: Member [" + username +
+                //  WEBSOCKET BROADCAST: Broadcast fine clearing transactions
+                SystemActivityServer.broadcastActivity(" FINE SETTLED: Member [" + username +
                         "] has successfully paid and cleared fine record ID: #" + fineId);
                 return true;
             }
@@ -142,7 +140,7 @@ public class FineBean {
         try {
             fineDao.delete(fineId);
 
-            // 🌟 WEBSOCKET BROADCAST: Log direct admin intervention updates
+            //  WEBSOCKET BROADCAST: Log direct admin intervention updates
             SystemActivityServer.broadcastActivity("🚨 FINE WAIVED: Fine entry state ID: #" +
                     fineId + " was manually deleted/waived by an Administrator.");
 
@@ -152,9 +150,9 @@ public class FineBean {
         }
     }
 
-    // =========================================================================
-    // 📉 FINANCIAL PROJECTION COMPUTATION ENGINE
-    // =========================================================================
+
+    //  FINANCIAL PROJECTION COMPUTATION ENGINE
+
 
     public double calculateFineForRecord(int borrowId) {
         int lateDays = borrowDao.getOverdueDays(borrowId);
@@ -174,9 +172,9 @@ public class FineBean {
         return totalUnpaidFines + calculateOngoingLateFees(allActiveLoans);
     }
 
-    // =========================================================================
-    // 🛠️ INTERNAL PARSING ENGINE UTILITIES
-    // =========================================================================
+
+    // INTERNAL PARSING ENGINE UTILITIES
+
 
     private double calculateOngoingLateFees(List<String> records) {
         double accumulatedFees = 0.0;

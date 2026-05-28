@@ -4,6 +4,7 @@ import app.dao.UserDAO;
 import app.model.User;
 import app.events.LibraryEvent;
 import app.security.JwtUtil;
+import app.security.PasswordHasher; // Ensure this utility class exists
 import app.websocket.SystemActivityServer;
 import jakarta.ejb.Stateless;
 import jakarta.enterprise.event.Event;
@@ -20,28 +21,26 @@ public class UserBean {
     @Inject
     private Event<LibraryEvent> eventPublisher;
 
-    // =========================================================================
-    // 👤 USER REGISTRATION & SECURITY VALIDATION
-    // =========================================================================
 
-    /**
-     * ✅ Unified authentication hook for REST/SOAP layers.
-     * @return Signed Bearer JWT token if valid, or a descriptive error code string.
-     */
+    //  USER REGISTRATION & SECURITY VALIDATION
+
+
     public String authenticate(String username, String password) {
         if (username == null || username.trim().isEmpty() || password == null || password.trim().isEmpty()) {
             return "missing_credentials";
         }
 
-        String role = userDAO.validateUserCredentials(username.trim(), password);
+        // Fetch user by username (DAO should NOT verify password in SQL)
+        User user = userDAO.findUserByUsername(username.trim());
 
-        if (role == null) {
-            SystemActivityServer.broadcastActivity("⚠️ SECURITY ALERT: Failed auth for: [" + username.trim() + "].");
+        // Verify password hash
+        if (user == null || !PasswordHasher.verify(password, user.getPassword())) {
+            SystemActivityServer.broadcastActivity(" SECURITY ALERT: Failed auth for: [" + username.trim() + "].");
             return "invalid_credentials";
         }
 
-        String generatedToken = JwtUtil.generateToken(username.trim(), role);
-        SystemActivityServer.broadcastActivity("🔑 SECURITY ACCESS: Token established for [" + username.trim() + "] (Role: " + role + ")");
+        String generatedToken = JwtUtil.generateToken(user.getUsername(), user.getRole());
+        SystemActivityServer.broadcastActivity(" SECURITY ACCESS: Token established for [" + user.getUsername() + "]");
 
         return "Bearer " + generatedToken;
     }
@@ -60,11 +59,13 @@ public class UserBean {
         if (userDAO.emailExists(cleanEmail)) return "email_taken";
 
         try {
-            User newUser = new User(username.trim(), cleanEmail, password, whitelistedRole);
+            // Hash password before saving
+            String hashedPassword = PasswordHasher.hash(password);
+            User newUser = new User(username.trim(), cleanEmail, hashedPassword, whitelistedRole);
             userDAO.save(newUser);
 
             eventPublisher.fire(new LibraryEvent("REGISTER", cleanEmail, "Created: " + whitelistedRole, "Active"));
-            SystemActivityServer.broadcastActivity("👤 NEW USER: [" + username.trim() + "] registered as: " + whitelistedRole.toUpperCase());
+            SystemActivityServer.broadcastActivity("👤 NEW USER: [" + username.trim() + "] registered.");
 
             return "success";
         } catch (Exception e) {
@@ -72,9 +73,9 @@ public class UserBean {
         }
     }
 
-    // =========================================================================
-    // 📖 DATA LOOKUPS & QUERIES
-    // =========================================================================
+
+    //  DATA LOOKUPS & QUERIES
+
 
     public List<User> getAllUsers() { return userDAO.findAll(); }
     public User getUserById(int id) { return userDAO.findById(id); }
@@ -87,9 +88,9 @@ public class UserBean {
                 .collect(Collectors.toList());
     }
 
-    // =========================================================================
-    // ✏️ PROFILE MUTATIONS
-    // =========================================================================
+
+    //  PROFILE MUTATIONS
+
 
     public boolean updateUser(User user) {
         try { userDAO.save(user); return true; } catch (Exception e) { return false; }
@@ -100,10 +101,14 @@ public class UserBean {
         if (existing == null) return false;
 
         existing.setEmail(email);
-        if (password != null && !password.trim().isEmpty()) existing.setPassword(password);
+
+        // Hash password only if it has changed/been provided
+        if (password != null && !password.trim().isEmpty()) {
+            existing.setPassword(PasswordHasher.hash(password));
+        }
 
         if (updateUser(existing)) {
-            SystemActivityServer.broadcastActivity("🛠️ PROFILE MODIFIED: [" + username + "].");
+            SystemActivityServer.broadcastActivity(" PROFILE MODIFIED: [" + username + "].");
             return true;
         }
         return false;
@@ -111,9 +116,8 @@ public class UserBean {
 
     public boolean deleteUser(int id) {
         try {
-            User existing = userDAO.findById(id);
             userDAO.delete(id);
-            SystemActivityServer.broadcastActivity("🚨 SECURITY PURGE: User ID [" + id + "] removed.");
+            SystemActivityServer.broadcastActivity(" SECURITY PURGE: User ID [" + id + "] removed.");
             return true;
         } catch (Exception e) {
             return false;

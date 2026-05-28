@@ -20,7 +20,8 @@ public class User {
     @Column(nullable = false)
     private String email;
 
-    @Column(nullable = false)
+    // In your User.java model class
+    @Column(nullable = false, length = 100) // Increase length to accommodate the hash
     private String password;
 
     private String role;

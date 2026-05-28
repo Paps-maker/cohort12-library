@@ -28,9 +28,9 @@ public class BookBean {
         this.bookValidator = bookValidator;
     }
 
-    // ==========================================
+
     // CRUD OPERATIONS
-    // ==========================================
+
 
     /**
      * Adds a book and returns null on success, or an error message string on failure.
@@ -46,8 +46,8 @@ public class BookBean {
         try {
             bookDAO.save(book);
 
-            // 🌟 WEBSOCKET BROADCAST: Notify admins when a new book enters the library catalog
-            SystemActivityServer.broadcastActivity("📚 NEW BOOK ADDED: '" + book.getTitle() +
+            //  WEBSOCKET BROADCAST: Notify admins when a new book enters the library catalog
+            SystemActivityServer.broadcastActivity(" NEW BOOK ADDED: '" + book.getTitle() +
                     "' by " + book.getAuthor() + " (ISBN: " + book.getIsbn() + ") has been added to the catalog inventory.");
 
             return null; // Null signifies success
@@ -77,8 +77,8 @@ public class BookBean {
             boolean isUpdated = bookDAO.updateBookDetailsAndInventory(book, addCopies);
 
             if (isUpdated) {
-                // 🌟 WEBSOCKET BROADCAST: Broadcast detailed catalog metadata modifications
-                SystemActivityServer.broadcastActivity("🔄 BOOK MODIFIED: Details for '" + book.getTitle() +
+                //  WEBSOCKET BROADCAST: Broadcast detailed catalog metadata modifications
+                SystemActivityServer.broadcastActivity(" BOOK MODIFIED: Details for '" + book.getTitle() +
                         "' (ID: " + book.getId() + ") have been updated. Added copies: " + addCopies);
                 return "success";
             }
@@ -98,8 +98,8 @@ public class BookBean {
 
             bookDAO.delete(id);
 
-            // 🌟 WEBSOCKET BROADCAST: Broadcast absolute item deletions from the platform records
-            SystemActivityServer.broadcastActivity("🚨 CATALOG PURGE: Book '" + bookTitle +
+            //  WEBSOCKET BROADCAST: Broadcast absolute item deletions from the platform records
+            SystemActivityServer.broadcastActivity(" CATALOG PURGE: Book '" + bookTitle +
                     "' (ID: " + id + ") was permanently deleted from the system repository by an Admin.");
 
         } catch (Exception e) {
@@ -107,9 +107,9 @@ public class BookBean {
         }
     }
 
-    // ==========================================
+
     // INVENTORY LOGIC
-    // ==========================================
+
 
     public boolean addCopies(int bookId, int amount) {
         boolean isAdminAction = (amount > 1 || amount < -1);
@@ -117,8 +117,8 @@ public class BookBean {
 
         if (isSuccess) {
             String bookTitle = getBookTitle(bookId);
-            // 🌟 WEBSOCKET BROADCAST: Track real-time inventory adjustments
-            SystemActivityServer.broadcastActivity("📦 INVENTORY ADJUSTMENT: Book '" + bookTitle +
+            //  WEBSOCKET BROADCAST: Track real-time inventory adjustments
+            SystemActivityServer.broadcastActivity(" INVENTORY ADJUSTMENT: Book '" + bookTitle +
                     "' (ID: " + bookId + ") stock levels updated by " + (amount > 0 ? "+" : "") + amount + " unit(s).");
         }
         return isSuccess;
@@ -129,9 +129,9 @@ public class BookBean {
         return book != null && book.getAvailableCopies() > 0;
     }
 
-    // ==========================================
+
     // ANALYTICS & METRICS
-    // ==========================================
+
 
     public int getAvailableCount() {
         return catalogBean.calculateTotalAvailableCopies();

@@ -17,9 +17,9 @@ public class CatalogBean {
     @Inject
     private BorrowDAO borrowDao;
 
-    // ==========================================
+
     // BOOK CRUD OPERATIONS
-    // ==========================================
+
 
     public List<Book> getAllBooks() {
         return bookDao.getAllBooks();
@@ -41,7 +41,7 @@ public class CatalogBean {
 
             bookDao.delete(bookId);
 
-            // 🌟 WEBSOCKET BROADCAST: Log core catalog deletions
+            //  WEBSOCKET BROADCAST: Log core catalog deletions
             SystemActivityServer.broadcastActivity("🚨 CATALOG REMOVAL: '" + bookTitle +
                     "' (ID: " + bookId + ") has been dropped from the repository systems by Admin.");
         } catch (Exception e) {
@@ -49,11 +49,9 @@ public class CatalogBean {
         }
     }
 
-    /**
-     * Updates book details.
-     * We explicitly call bookDao.update(book) to ensure persistence
-     * and avoid type mismatch errors during compilation.
-     */
+
+     //Updates book details.
+
     public void updateBook(Book book, int addCopies) {
         if (addCopies != 0) {
             book.setQuantity(book.getQuantity() + addCopies);
@@ -63,14 +61,14 @@ public class CatalogBean {
         // Explicitly updating to ensure the object state is synchronized
         bookDao.update(book);
 
-        // 🌟 WEBSOCKET BROADCAST: Broadcast detailed catalog configuration updates
+        // Broadcast detailed catalog configuration updates
         SystemActivityServer.broadcastActivity("📋 CATALOG UPDATED: Core records for '" + book.getTitle() +
                 "' (ID: " + book.getId() + ") updated. Inventory adjustment: " + (addCopies >= 0 ? "+" : "") + addCopies);
     }
 
-    // ==========================================
-    // 📊 SYSTEM-WIDE AGGREGATIONS & METRICS
-    // ==========================================
+
+    //  SYSTEM-WIDE AGGREGATIONS & METRICS
+
 
     public int calculateTotalAvailableCopies() {
         return bookDao.getAllBooks().stream()
@@ -89,9 +87,9 @@ public class CatalogBean {
         return borrowDao.getMemberLoanCount(username.trim());
     }
 
-    // ==========================================
+
     // DASHBOARD LABEL & STATUS HELPERS
-    // ==========================================
+
 
     public String getBorrowedLabel(String role) {
         return "ADMIN".equalsIgnoreCase(role)

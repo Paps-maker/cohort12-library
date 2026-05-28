@@ -1,6 +1,6 @@
 package app.controller;
 
-import app.dao.UserDAO;
+import app.ejbs.UserBean;
 import app.framework.ActionGetMethod;
 import app.framework.ActionPostMethod;
 import app.framework.Controller;
@@ -9,12 +9,14 @@ import app.model.User;
 import jakarta.inject.Inject;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Controller
 public class AuthController {
 
     @Inject
-    private UserDAO userDAO;
+    private UserBean userBean;
 
     // 1. DISPLAY LOGIN PAGE
     @ActionGetMethod("/login")
@@ -28,10 +30,15 @@ public class AuthController {
     public ModelAndView authenticate(HttpServletRequest request) {
         String username = request.getParameter("username");
         String password = request.getParameter("password");
-        User user = userDAO.findUser(username, password);
 
-        if (user != null) {
-            // Prevent Session Fixation by invalidating existing session before creating a new one
+        // Authenticate using the EJB, which handles the Hashing/Verification logic
+        String authResult = userBean.authenticate(username, password);
+
+        // Check if authentication succeeded (starts with "Bearer " based on your UserBean)
+        if (authResult != null && authResult.startsWith("Bearer ")) {
+            User user = userBean.getUserDetails(username);
+
+            // Prevent Session Fixation
             HttpSession oldSession = request.getSession(false);
             if (oldSession != null) {
                 oldSession.invalidate();
@@ -44,7 +51,11 @@ public class AuthController {
             return new ModelAndView("redirect:/books");
         }
 
-        return new ModelAndView("redirect:/login?error=true");
+        // Encode the custom error message
+        String errorMessage = "Invalid username or password";
+        String encodedError = URLEncoder.encode(errorMessage, StandardCharsets.UTF_8);
+
+        return new ModelAndView("redirect:/login?error=" + encodedError);
     }
 
     // 3. LOGOUT

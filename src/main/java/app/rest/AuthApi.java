@@ -49,7 +49,7 @@ public class AuthApi {
             return Response.ok(responseData).build();
         }
 
-        return errorResponse(Response.Status.UNAUTHORIZED, "Invalid structural database security credentials");
+        return errorResponse(Response.Status.UNAUTHORIZED, "Invalid  credentials");
     }
 
     // Centralized helper for uniform error responses
